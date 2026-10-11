@@ -64,6 +64,7 @@ export function validateCandidateEdit(existing, draft) {
   const result = candidateSchema.safeParse({
     ...existing,
     ...fields,
+    ...(changedPoint || fields.name !== existing.name ? { mapReference: undefined } : {}),
     ...(changed
       ? {
           source: 'manual',
@@ -74,6 +75,7 @@ export function validateCandidateEdit(existing, draft) {
   });
   const errors = result.success ? {} : errorsFrom(result);
   if (coordinateError) errors.coordinates = coordinateError;
+  if (result.success && result.data.mapReference === undefined) delete result.data.mapReference;
   if (!fields.name) errors.name = 'Name this location candidate.';
   return Object.keys(errors).length ? { errors } : { value: result.data, errors: {}, changedPoint };
 }

@@ -58,6 +58,7 @@ import CandidateComparison from './components/CandidateComparison.jsx';
 import AiAccess from './components/AiAccess.jsx';
 import { AnalysisReview, AnalysisCorrection } from './components/AnalysisReview.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
+import { resolvePlaceReference } from './lib/place-match.mjs';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
 
@@ -461,6 +462,54 @@ export default function App() {
     setMessage(
       'Correction saved locally. Rejected leads will be excluded when you include it in a new analysis.',
     );
+  }
+  async function resolveSelectedPoint() {
+    if (!selected || busy) return;
+    const candidate = selected;
+    const requestRevision = revision.current;
+    setBusy('map-reference');
+    try {
+      const response = await fetch(
+        `/api/geocode?${new URLSearchParams({ q: `${candidate.name}, ${candidate.country}`.slice(0, 200) })}`,
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Place search unavailable.');
+      const resolved = resolvePlaceReference(candidate, data.results);
+      if (!resolved)
+        throw new Error(
+          'No unambiguous landmark reference found. Add a place manually after checking its identity.',
+        );
+      if (requestRevision !== revision.current) return;
+      const live = currentRef.current.candidates.find((item) => item.id === candidate.id);
+      if (
+        !live ||
+        live.name !== candidate.name ||
+        live.lat !== candidate.lat ||
+        live.lng !== candidate.lng
+      )
+        throw new Error('This candidate changed during the lookup. Resolve its map point again.');
+      update({
+        candidates: currentRef.current.candidates.map((item) =>
+          item.id === candidate.id
+            ? {
+                ...item,
+                lat: resolved.lat,
+                lng: resolved.lng,
+                mapReference: resolved.mapReference,
+                modelPoint: resolved.modelPoint,
+                status: 'hypothesis',
+              }
+            : item,
+        ),
+      });
+      setMessage(
+        'Map point resolved from OpenStreetMap. This is the landmark reference, not the camera position.',
+      );
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy('');
+    }
   }
   function toggleClue(id) {
     update({ clues: current.clues.map((c) => (c.id === id ? { ...c, checked: !c.checked } : c)) });
@@ -976,12 +1025,43 @@ export default function App() {
                         </button>
                       </div>
                       <p>{selected.reason}</p>
-                      {selected.source === 'ai' && (
+                      {selected.mapReference && (
+                        <div className="analysis-correction">
+                          <p>
+                            Landmark coordinates from the geocoder. The camera position is unknown.
+                          </p>
+                          <External href={selected.mapReference.url}>
+                            {selected.mapReference.attribution} <ArrowUpRight size={13} />
+                          </External>
+                          {selected.modelPoint && (
+                            <details>
+                              <summary>Original AI coordinate guess · replaced</summary>
+                              <p>
+                                {selected.modelPoint.lat}, {selected.modelPoint.lng}
+                              </p>
+                            </details>
+                          )}
+                        </div>
+                      )}
+                      {selected.source === 'ai' && !selected.mapReference && (
                         <p>
                           Approximate landmark reference point. Camera position and coordinate
                           accuracy are unknown.
                         </p>
                       )}
+                      {selected.source === 'ai' &&
+                        !selected.mapReference &&
+                        selected.status !== 'ruled-out' && (
+                          <button
+                            className="button secondary"
+                            disabled={Boolean(busy)}
+                            onClick={resolveSelectedPoint}
+                          >
+                            {busy === 'map-reference'
+                              ? 'Resolving map point…'
+                              : 'Resolve map point'}
+                          </button>
+                        )}
                       {selected.visualEvidence && (
                         <details className="candidate-origin">
                           <summary>Visual support reported by AI · unverified</summary>
@@ -1563,7 +1643,9 @@ export default function App() {
               A resized photo, these clues and any selected correction will be sent to{' '}
               {providerName} through your server. The original file and its EXIF metadata stay in
               your browser. Results are hypotheses to verify. Detailed analysis may take longer and
-              use more tokens than before; one request consumes one daily allowance.
+              use more tokens than before; one request consumes one daily allowance. Proposed public
+              landmark names are sent to the configured geocoder (Nominatim by default) to resolve
+              map points. Your photo is not sent to the geocoder.
             </p>
           </div>
           <button

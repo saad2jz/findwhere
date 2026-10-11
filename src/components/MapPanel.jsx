@@ -89,11 +89,13 @@ export default function MapPanel({ candidates, selected, onSelect }) {
       <div className="map-canvas" ref={host} role="region" aria-label="Location candidate map" />
       <div className="map-label">
         <span className="live-dot" />{' '}
-        {selected?.source === 'ai'
-          ? 'Approximate AI reference point'
-          : selected
-            ? 'Candidate location'
-            : 'Your next discovery'}
+        {selected?.mapReference
+          ? 'Geocoded landmark reference'
+          : selected?.source === 'ai'
+            ? 'Approximate AI reference point'
+            : selected
+              ? 'Candidate location'
+              : 'Your next discovery'}
       </div>
       <div className="map-actions">
         <button
@@ -122,9 +124,11 @@ export default function MapPanel({ candidates, selected, onSelect }) {
           <div>
             <strong>{selected.name}</strong>
             <span>
-              {selected.source === 'ai' ? 'Approx. ' : ''}
-              {selected.lat.toFixed(selected.source === 'ai' ? 3 : 5)}°,{' '}
-              {selected.lng.toFixed(selected.source === 'ai' ? 3 : 5)}°
+              {selected.source === 'ai' && !selected.mapReference ? 'Approx. ' : ''}
+              {selected.lat.toFixed(
+                selected.source === 'ai' && !selected.mapReference ? 3 : 5,
+              )}°,{' '}
+              {selected.lng.toFixed(selected.source === 'ai' && !selected.mapReference ? 3 : 5)}°
             </span>
           </div>
         </div>

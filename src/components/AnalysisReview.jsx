@@ -24,8 +24,9 @@ export function AnalysisReview({ investigation, onCorrect }) {
           {review.withheldCandidates > 0 && (
             <p>
               <strong>
-                {review.withheldCandidates} weak or contradictory location suggestion
-                {review.withheldCandidates === 1 ? '' : 's'} withheld.
+                {review.withheldCandidates} location suggestion
+                {review.withheldCandidates === 1 ? '' : 's'} kept off the map: insufficient evidence
+                or no unambiguous map reference.
               </strong>
             </p>
           )}

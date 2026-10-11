@@ -9,6 +9,14 @@ const visualEvidenceSchema = z.object({
   features: z.array(z.string().min(1).max(2000)).max(12),
   distinctiveMatch: z.string().max(1000),
 });
+const mapReferenceSchema = z.object({
+  label: z.string().min(1).max(300),
+  attribution: z.string().max(200),
+  url: z
+    .string()
+    .max(2000)
+    .refine((value) => Boolean(safeUrl(value))),
+});
 export const analysisFeedbackSchema = z.object({
   knownPlace: z.string().max(300),
   rejectedNames: z.array(z.string().min(1).max(300)).max(50),
@@ -27,6 +35,8 @@ const candidateDetailsSchema = pointSchema.extend({
   source: z.enum(['manual', 'gps', 'ai', 'demo']),
   reason: z.string().max(2000),
   visualEvidence: visualEvidenceSchema.optional(),
+  mapReference: mapReferenceSchema.optional(),
+  modelPoint: pointSchema.optional(),
 });
 export const candidateSchema = candidateDetailsSchema.extend({
   id: z.string().min(1).max(100),
@@ -235,6 +245,18 @@ export function exportReport(investigation, { originId } = {}) {
         'AI reference point only; camera position and coordinate accuracy are unknown.',
         '',
       );
+    if (candidate.mapReference) {
+      lines.push(
+        `Geocoded landmark reference (not camera position): ${md(candidate.mapReference.label)}`,
+        `${md(candidate.mapReference.attribution)}; source: <${safeUrl(candidate.mapReference.url)}>`,
+        '',
+      );
+      if (candidate.modelPoint)
+        lines.push(
+          `Original AI coordinate guess (not used on map): ${candidate.modelPoint.lat}, ${candidate.modelPoint.lng}`,
+          '',
+        );
+    }
     if (candidate.visualEvidence) {
       lines.push(
         `Model-reported distinctive match (unverified): ${md(candidate.visualEvidence.distinctiveMatch)}`,
@@ -282,7 +304,7 @@ export function exportReport(investigation, { originId } = {}) {
       '',
       md(data.analysisReview.summary),
       '',
-      `Withheld weak or contradictory candidates: ${data.analysisReview.withheldCandidates}`,
+      `Candidates kept off the map (insufficient evidence or unresolved reference): ${data.analysisReview.withheldCandidates}`,
       '',
     );
     for (const uncertainty of data.analysisReview.uncertainties)
@@ -340,6 +362,8 @@ export const analysisSchema = z.object({
         distinctiveMatch: z.string().max(1000).default(''),
         contradictions: z.array(z.string().max(500)).max(8).default([]),
         visualEvidence: visualEvidenceSchema.optional(),
+        mapReference: mapReferenceSchema.optional(),
+        modelPoint: pointSchema.optional(),
       }),
     )
     .max(5),

@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { analysisSchema, analysisJsonSchema, analysisFeedbackSchema } from '../src/lib/domain.mjs';
-import { assessAnalysis, sceneContext } from './analysis-quality.mjs';
+import { assessAnalysis, sceneContext, resolveAnalysisPoints } from './analysis-quality.mjs';
+import { createGeocoder, GeocoderBusy } from './geocoder.mjs';
 import { createAccess, createDailyQuota } from './security.mjs';
 import { analyzeGemini, sceneInstructions } from './gemini.mjs';
 
@@ -59,8 +60,13 @@ export function createApp({
     access.configured &&
     originConfigured &&
     dailyLimit > 0;
-  let lastGeocode = -Infinity;
-  const cache = new Map();
+  const geocoder = createGeocoder({
+    fetcher,
+    now,
+    url: geocoderUrl,
+    userAgent:
+      process.env.GEOCODER_USER_AGENT || 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)',
+  });
   const attempts = new Map();
   let runningAnalysis = 0;
   let globalAttempts = { start: now(), count: 0 };
@@ -133,53 +139,12 @@ export function createApp({
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (query.length < 3 || query.length > 200)
       return res.status(400).json({ error: 'Enter a place name between 3 and 200 characters.' });
-    const key = query.toLocaleLowerCase();
-    const cached = cache.get(key);
-    if (cached && now() - cached.time < 24 * 60 * 60 * 1000)
-      return res.json({ results: cached.results, attribution: '© OpenStreetMap contributors' });
-    if (now() - lastGeocode < 1100)
-      return res.status(429).json({ error: 'Please wait a moment before searching again.' });
-    lastGeocode = now();
-    const url = new URL(geocoderUrl);
-    url.search = new URLSearchParams({
-      q: query,
-      format: 'jsonv2',
-      addressdetails: '1',
-      limit: '5',
-    }).toString();
     try {
-      const response = await fetcher(url, {
-        headers: {
-          'User-Agent':
-            process.env.GEOCODER_USER_AGENT ||
-            'Findwhere/1.0 (https://github.com/saad2jz/findwhere)',
-          Accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!response.ok) throw new Error('Geocoder unavailable');
-      const raw = await response.json();
-      if (!Array.isArray(raw)) throw new Error('Invalid geocoder response');
-      const results = raw
-        .slice(0, 5)
-        .map((item) => ({
-          name: String(item.display_name || '').slice(0, 300),
-          country: String(item.address?.country || '').slice(0, 100),
-          lat: Number(item.lat),
-          lng: Number(item.lon),
-        }))
-        .filter(
-          (item) =>
-            item.name &&
-            Number.isFinite(item.lat) &&
-            Number.isFinite(item.lng) &&
-            Math.abs(item.lat) <= 90 &&
-            Math.abs(item.lng) <= 180,
-        );
-      if (cache.size >= 500) cache.delete(cache.keys().next().value);
-      cache.set(key, { time: now(), results });
+      const results = await geocoder.search(query);
       return res.json({ results, attribution: '© OpenStreetMap contributors' });
-    } catch {
+    } catch (error) {
+      if (error instanceof GeocoderBusy)
+        return res.status(429).json({ error: 'Please wait a moment before searching again.' });
       return res.status(502).json({
         error: 'Place search is unavailable. You can still add a candidate by coordinates.',
       });
@@ -280,7 +245,10 @@ export function createApp({
             'The model returned an invalid result. No candidates were saved; please try again.',
         });
       return res.json({
-        ...assessAnalysis(validated.data, input.data.feedback),
+        ...(await resolveAnalysisPoints(
+          assessAnalysis(validated.data, input.data.feedback),
+          geocoder.search,
+        )),
         source: 'ai',
         verified: false,
       });

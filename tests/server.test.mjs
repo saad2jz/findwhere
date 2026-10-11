@@ -320,6 +320,64 @@ test('invalid and failed model output produce recoverable errors', async () => {
     },
   );
 });
+
+test('AI map coordinates come from the shared geocoder, not the model', async () => {
+  let geocodeCalls = 0;
+  const outputWithPlace = {
+    ...output,
+    clues: [
+      { category: 'Facade', text: 'Brick and stone.' },
+      { category: 'Layout', text: 'Specific aligned garden.' },
+    ],
+    candidates: [
+      {
+        name: 'Château de Sceaux',
+        country: 'France',
+        lat: 48.7719,
+        lng: 2.2908,
+        confidence: 'high',
+        reason: 'Visual hypothesis.',
+        supportingClueIndexes: [0, 1],
+        distinctiveMatch: 'Specific facade and layout.',
+        contradictions: [],
+      },
+    ],
+  };
+  await withServer(
+    {
+      analyze: async () => outputWithPlace,
+      fetcher: async (url) => {
+        geocodeCalls++;
+        assert.equal(url.searchParams.get('q'), 'Château de Sceaux, France');
+        return {
+          ok: true,
+          json: async () => [
+            {
+              display_name: 'Château de Sceaux, Sceaux, France',
+              class: 'historic',
+              lat: '48.7743732',
+              lon: '2.3000678',
+              address: { country: 'France' },
+            },
+          ],
+        };
+      },
+    },
+    async (base) => {
+      const result = await (await post(base, input)).json();
+      assert.equal(result.candidates[0].lng, 2.3000678);
+      assert.equal(result.candidates[0].modelPoint.lng, 2.2908);
+      assert.equal(result.verified, false);
+      const places = await (
+        await fetch(
+          base + '/api/geocode?' + new URLSearchParams({ q: 'Château de Sceaux, France' }),
+        )
+      ).json();
+      assert.equal(places.results[0].lng, 2.3000678);
+      assert.equal(geocodeCalls, 1);
+    },
+  );
+});
 test('analysis rate limit bounds requests', async () =>
   withServer({ analyze: async () => output }, async (base) => {
     for (let i = 0; i < 5; i++) assert.equal((await post(base, input)).status, 200);

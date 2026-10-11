@@ -1,4 +1,5 @@
 import { analysisSchema } from '../src/lib/domain.mjs';
+import { resolvePlaceReference } from '../src/lib/place-match.mjs';
 
 const normalize = (value) =>
   value
@@ -62,4 +63,33 @@ export function sceneContext(input) {
     investigatorCorrection: input.feedback,
     note: 'The reported place is supplied by the investigator, not independently verified. Check it against visible features; do not treat it as proof. Do not repeat rejected names.',
   });
+}
+
+export async function resolveAnalysisPoints(assessment, lookup) {
+  const candidates = [];
+  const uncertainties = [...assessment.uncertainties];
+  for (const candidate of assessment.candidates.slice(0, 3)) {
+    try {
+      const results = await lookup(`${candidate.name}, ${candidate.country}`.slice(0, 200), {
+        waitForSlot: true,
+      });
+      const resolved = resolvePlaceReference(candidate, results);
+      if (resolved) {
+        candidates.push(resolved);
+        continue;
+      }
+    } catch {
+      /* Keep clues and explain the missing map reference without inventing a point. */
+    }
+    uncertainties.unshift(
+      `${candidate.name}: no unambiguous landmark reference was found in the geocoder; the AI coordinate guess was not placed on the map.`,
+    );
+  }
+  return {
+    ...assessment,
+    candidates,
+    uncertainties: uncertainties.slice(0, 8),
+    withheldCandidates:
+      assessment.withheldCandidates + assessment.candidates.length - candidates.length,
+  };
 }

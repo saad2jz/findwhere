@@ -153,7 +153,14 @@ models; this can increase latency and token costs compared with the earlier mini
 AI first describes visible features, then proposes at most three named public landmarks. The server
 withholds low-confidence guesses, candidates with contradictions, and candidates without at least two
 distinct referenced observations and a distinctive-match description. Retained points remain unverified,
-approximate landmark references; camera position and coordinate accuracy are unknown. Maps do not draw
+landmark references; camera position and coordinate accuracy are unknown. Before placing a new AI
+candidate on the map, the server searches its public landmark name and country in the configured geocoder.
+It requires a matching landmark name and country, excludes administrative results, and rejects duplicate
+names more than 250 m apart. The map uses the geocoder point, retaining the original model coordinate guess
+for provenance. A missing, ambiguous or unavailable reference withholds that map point and explains why;
+there is no fallback to model coordinates. **Resolve map point** applies the same matching rules to older
+saved AI candidates without calling AI again. This resolves a named landmark, not the photographer's position,
+and does not prove that the landmark was correctly recognized. Maps do not draw
 an invented accuracy radius. Summary, limitations and next checks are visible in the investigation and reports.
 
 These checks validate the structure of model-reported support, not the truth of that support. The app
@@ -164,7 +171,7 @@ as predating these checks rather than silently being treated as newly validated.
 Use **Correct AI result** to record a known place and rule out untouched AI hypotheses without deleting
 them. Corrections remain local until explicitly included in the next analysis dialog. The server excludes
 previously rejected names; investigator-reported places are labelled as user supplied, never as AI recognition.
-Corrections, visual support and the latest assessment survive JSON backup/import and Markdown export.
+Corrections, visual support, map-reference provenance and the latest assessment survive JSON backup/import and Markdown export.
 Offline tests cover these rules, including weak chateau guesses, but do not measure real recognition accuracy.
 
 `AI_DAILY_LIMIT` defaults to 10 requests per UTC day across all sessions; 0 pauses AI. A reservation is
