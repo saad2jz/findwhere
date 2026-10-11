@@ -47,6 +47,7 @@ import { mergeAnalysis, validateCandidateEdit } from './lib/investigation.mjs';
 import { demoCase, photoSource } from './data/demo.mjs';
 import catalog from './data/resources.json';
 import Modal from './components/Modal.jsx';
+import PhotoInspector from './components/PhotoInspector.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
@@ -1409,11 +1410,7 @@ export default function App() {
       )}
       {modal === 'photo' && (
         <Modal title="Source image" onClose={() => setModal(null)} wide>
-          <img
-            className="expanded-image"
-            src={current.photo}
-            alt={`Source image: ${current.fileName}`}
-          />
+          <PhotoInspector src={current.photo} fileName={current.fileName} />
           {referencePhoto && (
             <p className="subtle">
               Photo by Bert K. / Bert Kaufmann,{' '}

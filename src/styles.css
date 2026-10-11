@@ -1905,13 +1905,91 @@ dialog::backdrop {
 .wide-modal {
   width: min(960px, calc(100% - 32px));
 }
-.expanded-image {
+.photo-inspector {
+  margin-bottom: 18px;
+}
+.inspector-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.inspector-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #ccd5c4;
+  border-radius: 6px;
+  background: #fff;
+  color: #33432c;
+  font-size: 13px;
+}
+.inspector-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.inspector-toolbar button:not(:disabled):hover {
+  background: #edf3e5;
+}
+.inspector-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.inspector-zoom-controls output {
+  min-width: 56px;
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.inspector-surface {
+  position: relative;
+  overflow: hidden;
   width: 100%;
-  display: block;
-  max-height: 65vh;
-  object-fit: contain;
-  border-radius: 5px;
-  margin-bottom: 16px;
+  height: min(55vh, 520px);
+  min-height: 220px;
+  background: #20271f;
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: pinch-zoom;
+}
+.inspector-surface.is-dragging {
+  cursor: grabbing;
+}
+.inspector-surface:focus-visible,
+.inspector-toolbar button:focus-visible {
+  outline: 3px solid #819e58;
+  outline-offset: 3px;
+}
+.inspector-surface img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  max-height: none;
+  transform-origin: center;
+  user-select: none;
+  pointer-events: none;
+}
+.inspector-surface > p {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #fff;
+  text-align: center;
+}
+.inspector-status {
+  margin: 12px 0 8px;
+  font-size: 12px;
+  color: #4f6046;
+  font-variant-numeric: tabular-nums;
 }
 .settings-state {
   display: flex;
@@ -2766,9 +2844,6 @@ dialog::backdrop {
   }
   .upload-target small {
     font-size: 10px;
-  }
-  .expanded-image {
-    max-height: 55vh;
   }
 }
 @media (prefers-reduced-motion: reduce) {

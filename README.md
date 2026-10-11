@@ -11,6 +11,9 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
 ## What works
 
 - **Photo intake:** JPEG, PNG, and WebP upload or drag and drop; local EXIF extraction; automatic GPS candidates.
+- **Photo inspection:** expand a stored preview, zoom up to 8× its fitted size, drag or use arrow keys to pan,
+  rotate in 90° steps, and reset the view. Use + / −, R, and 0 while the image area is focused.
+  These view controls do not alter the saved photo or reconstruct detail lost during resizing.
 - **Investigation map:** interactive candidate markers, street/satellite layers, zoom, recentering, and external
   Google Maps/Street View links.
 - **Location candidates:** search named places or enter WGS84 coordinates; refine names, points, confidence,
