@@ -5,6 +5,20 @@ export const pointSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
   lng: z.number().finite().min(-180).max(180),
 });
+const visualEvidenceSchema = z.object({
+  features: z.array(z.string().min(1).max(2000)).max(12),
+  distinctiveMatch: z.string().max(1000),
+});
+export const analysisFeedbackSchema = z.object({
+  knownPlace: z.string().max(300),
+  rejectedNames: z.array(z.string().min(1).max(300)).max(50),
+});
+const analysisReviewSchema = z.object({
+  summary: z.string().max(2000),
+  uncertainties: z.array(z.string().max(500)).max(8),
+  nextSteps: z.array(z.string().max(500)).max(8),
+  withheldCandidates: z.number().int().min(0).max(5),
+});
 const candidateDetailsSchema = pointSchema.extend({
   name: z.string().min(1).max(300),
   country: z.string().max(100),
@@ -12,6 +26,7 @@ const candidateDetailsSchema = pointSchema.extend({
   status: z.enum(['hypothesis', 'supported', 'ruled-out']),
   source: z.enum(['manual', 'gps', 'ai', 'demo']),
   reason: z.string().max(2000),
+  visualEvidence: visualEvidenceSchema.optional(),
 });
 export const candidateSchema = candidateDetailsSchema.extend({
   id: z.string().min(1).max(100),
@@ -76,6 +91,8 @@ export const caseSchema = z.object({
       'Evidence identities must be unique.',
     ),
   notes: z.string().max(20000),
+  analysisReview: analysisReviewSchema.nullable().optional(),
+  analysisFeedback: analysisFeedbackSchema.nullable().optional(),
   archivedAt: z.iso.datetime().nullable().default(null),
 });
 
@@ -213,6 +230,19 @@ export function exportReport(investigation, { originId } = {}) {
       `[OpenStreetMap](<${mapLinks(candidate).osm}>)`,
       '',
     );
+    if (candidate.source === 'ai')
+      lines.push(
+        'AI reference point only; camera position and coordinate accuracy are unknown.',
+        '',
+      );
+    if (candidate.visualEvidence) {
+      lines.push(
+        `Model-reported distinctive match (unverified): ${md(candidate.visualEvidence.distinctiveMatch)}`,
+        '',
+      );
+      for (const feature of candidate.visualEvidence.features) lines.push(`- ${md(feature)}`);
+      lines.push('');
+    }
     if (candidate.original) {
       const original = candidate.original;
       lines.push(
@@ -245,6 +275,31 @@ export function exportReport(investigation, { originId } = {}) {
       'A bearing is not defined for identical or opposite points, or from a pole.',
       '',
     );
+  }
+  if (data.analysisReview) {
+    lines.push(
+      '## Latest AI assessment (unverified)',
+      '',
+      md(data.analysisReview.summary),
+      '',
+      `Withheld weak or contradictory candidates: ${data.analysisReview.withheldCandidates}`,
+      '',
+    );
+    for (const uncertainty of data.analysisReview.uncertainties)
+      lines.push(`- Limitation: ${md(uncertainty)}`);
+    for (const step of data.analysisReview.nextSteps) lines.push(`- Next check: ${md(step)}`);
+    lines.push('');
+  }
+  if (data.analysisFeedback) {
+    lines.push(
+      '## Investigator correction',
+      '',
+      `Reported location (user supplied, not an AI identification): ${md(data.analysisFeedback.knownPlace || 'Not supplied')}`,
+      '',
+    );
+    for (const name of data.analysisFeedback.rejectedNames)
+      lines.push(`- Rejected lead: ${md(name)}`);
+    lines.push('');
   }
   lines.push('## Evidence ledger', '');
   for (const clue of data.clues) {
@@ -281,20 +336,27 @@ export const analysisSchema = z.object({
         country: z.string().max(100),
         confidence: z.enum(['low', 'medium', 'high']),
         reason: z.string().max(2000),
+        supportingClueIndexes: z.array(z.number().int().min(0).max(11)).max(12).default([]),
+        distinctiveMatch: z.string().max(1000).default(''),
+        contradictions: z.array(z.string().max(500)).max(8).default([]),
+        visualEvidence: visualEvidenceSchema.optional(),
       }),
     )
     .max(5),
   nextSteps: z.array(z.string().max(500)).max(8),
+  uncertainties: z.array(z.string().max(500)).max(8).default([]),
+  withheldCandidates: z.number().int().min(0).max(5).default(0),
 });
 
 export const analysisJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['summary', 'clues', 'candidates', 'nextSteps'],
+  required: ['summary', 'clues', 'candidates', 'nextSteps', 'uncertainties'],
   properties: {
     summary: { type: 'string' },
     clues: {
       type: 'array',
+      maxItems: 12,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -304,10 +366,21 @@ export const analysisJsonSchema = {
     },
     candidates: {
       type: 'array',
+      maxItems: 3,
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['name', 'country', 'lat', 'lng', 'confidence', 'reason'],
+        required: [
+          'name',
+          'country',
+          'lat',
+          'lng',
+          'confidence',
+          'reason',
+          'supportingClueIndexes',
+          'distinctiveMatch',
+          'contradictions',
+        ],
         properties: {
           name: { type: 'string' },
           country: { type: 'string' },
@@ -315,9 +388,17 @@ export const analysisJsonSchema = {
           lng: { type: 'number' },
           confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
           reason: { type: 'string' },
+          supportingClueIndexes: {
+            type: 'array',
+            items: { type: 'integer', minimum: 0, maximum: 11 },
+            maxItems: 12,
+          },
+          distinctiveMatch: { type: 'string' },
+          contradictions: { type: 'array', items: { type: 'string' }, maxItems: 8 },
         },
       },
     },
-    nextSteps: { type: 'array', items: { type: 'string' } },
+    nextSteps: { type: 'array', items: { type: 'string' }, maxItems: 8 },
+    uncertainties: { type: 'array', items: { type: 'string' }, maxItems: 8 },
   },
 };

@@ -3365,3 +3365,58 @@ dialog::backdrop {
 .ai-access .form-error {
   color: #9b2929;
 }
+.analysis-review {
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.analysis-review h3 {
+  font-size: 15px;
+  margin: 16px 0 8px;
+}
+.analysis-review p,
+.analysis-review li,
+.analysis-review summary {
+  font-size: 14px;
+}
+.analysis-review ul,
+.analysis-review ol {
+  padding-left: 24px;
+}
+.analysis-review summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.analysis-review .candidate-edit-heading {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.analysis-review .text-button {
+  min-height: 44px;
+}
+.analysis-correction {
+  border-left: 3px solid var(--green, #3e6753);
+  padding-left: 16px;
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+.analysis-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 12px 0;
+}
+.analysis-checkbox input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  accent-color: var(--green, #3e6753);
+}
+#known-place {
+  width: 100%;
+}

@@ -3,7 +3,8 @@ import OpenAI from 'openai';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { analysisSchema, analysisJsonSchema } from '../src/lib/domain.mjs';
+import { analysisSchema, analysisJsonSchema, analysisFeedbackSchema } from '../src/lib/domain.mjs';
+import { assessAnalysis, sceneContext } from './analysis-quality.mjs';
 import { createAccess, createDailyQuota } from './security.mjs';
 import { analyzeGemini, sceneInstructions } from './gemini.mjs';
 
@@ -14,6 +15,7 @@ const requestSchema = z.object({
     .max(5_000_000)
     .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/),
   context: z.string().max(2000).default(''),
+  feedback: analysisFeedbackSchema.optional(),
 });
 
 export function createApp({
@@ -249,7 +251,7 @@ export function createApp({
               content: [
                 {
                   type: 'input_text',
-                  text: input.data.context || 'Read this scene and suggest geographic hypotheses.',
+                  text: sceneContext(input.data),
                 },
                 { type: 'input_image', image_url: input.data.image, detail: 'high' },
               ],
@@ -263,7 +265,7 @@ export function createApp({
               schema: analysisJsonSchema,
             },
           },
-          max_output_tokens: 2000,
+          max_output_tokens: 6000,
         });
         if (!response.output_text)
           return res.status(422).json({
@@ -277,7 +279,11 @@ export function createApp({
           error:
             'The model returned an invalid result. No candidates were saved; please try again.',
         });
-      return res.json({ ...validated.data, source: 'ai', verified: false });
+      return res.json({
+        ...assessAnalysis(validated.data, input.data.feedback),
+        source: 'ai',
+        verified: false,
+      });
     } catch {
       return res.status(502).json({
         error:

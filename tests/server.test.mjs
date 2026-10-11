@@ -248,10 +248,58 @@ test('invalid image requests never reach the analyzer', async () => {
         { image: 'https://remote.example/photo.jpg' },
         { image: 'data:image/svg+xml;base64,AAAA' },
         { ...input, context: 'x'.repeat(2001) },
+        { ...input, feedback: { knownPlace: 'x'.repeat(301), rejectedNames: [] } },
+        { ...input, feedback: { knownPlace: '', rejectedNames: Array(51).fill('Place') } },
         {},
       ])
         assert.equal((await post(base, body)).status, 400);
       assert.equal(calls, 0);
+    },
+  );
+});
+
+test('API quality checks withhold unsupported and investigator-rejected locations', async () => {
+  const weak = {
+    name: 'Fontainebleau',
+    country: 'France',
+    lat: 48.4,
+    lng: 2.7,
+    confidence: 'low',
+    reason: 'Generic formal gardens.',
+  };
+  const rejected = {
+    ...weak,
+    name: 'Château de Vaux-le-Vicomte',
+    confidence: 'high',
+    supportingClueIndexes: [0, 1],
+    distinctiveMatch: 'Claimed match.',
+    contradictions: [],
+  };
+  await withServer(
+    {
+      analyze: async (request) => {
+        assert.equal(request.feedback.knownPlace, 'Parc de Sceaux');
+        return {
+          ...output,
+          clues: [
+            { category: 'Facade', text: 'Brick facade.' },
+            { category: 'Garden', text: 'Patterned garden.' },
+          ],
+          candidates: [weak, rejected],
+        };
+      },
+    },
+    async (base) => {
+      const response = await post(base, {
+        ...input,
+        feedback: { knownPlace: 'Parc de Sceaux', rejectedNames: ['Chateau de Vaux-le-Vicomte'] },
+      });
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.deepEqual(result.candidates, []);
+      assert.equal(result.withheldCandidates, 2);
+      assert.equal(result.verified, false);
+      assert.equal((await (await fetch(base + '/api/health')).json()).dailyRemaining, 9);
     },
   );
 });

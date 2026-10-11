@@ -52,6 +52,7 @@ export default function MapPanel({ candidates, selected, onSelect }) {
     group.clearLayers();
     candidates.forEach((candidate, index) => {
       const active = candidate.id === selected?.id;
+      if (candidate.status === 'ruled-out' && !active) return;
       const marker = L.marker([candidate.lat, candidate.lng], {
         icon: L.divIcon({
           className: 'candidate-marker',
@@ -64,24 +65,21 @@ export default function MapPanel({ candidates, selected, onSelect }) {
         keyboard: true,
       }).addTo(group);
       marker.on('click', () => onSelect(candidate.id));
-      if (active)
-        L.circle([candidate.lat, candidate.lng], {
-          radius: 140,
-          color: '#3e6753',
-          weight: 1,
-          opacity: 0.35,
-          fillOpacity: 0.07,
-          interactive: false,
-        }).addTo(group);
     });
-    if (selected) mapRef.current.setView([selected.lat, selected.lng], 14, { animate: false });
-    else if (!candidates.length) mapRef.current.setView([28, 0], 2, { animate: false });
+    if (selected)
+      mapRef.current.setView([selected.lat, selected.lng], selected.source === 'ai' ? 12 : 14, {
+        animate: false,
+      });
+    else mapRef.current.setView([28, 0], 2, { animate: false });
   }, [candidates, selected?.id, onSelect]);
   function recenter() {
-    if (selected) mapRef.current.setView([selected.lat, selected.lng], 15);
-    else if (candidates.length)
+    if (selected)
+      mapRef.current.setView([selected.lat, selected.lng], selected.source === 'ai' ? 12 : 15);
+    else if (candidates.some((candidate) => candidate.status !== 'ruled-out'))
       mapRef.current.fitBounds(
-        candidates.map((c) => [c.lat, c.lng]),
+        candidates
+          .filter((candidate) => candidate.status !== 'ruled-out')
+          .map((c) => [c.lat, c.lng]),
         { padding: [40, 40], maxZoom: 15 },
       );
     else mapRef.current.setView([28, 0], 2);
@@ -90,7 +88,12 @@ export default function MapPanel({ candidates, selected, onSelect }) {
     <div className="map-wrap">
       <div className="map-canvas" ref={host} role="region" aria-label="Location candidate map" />
       <div className="map-label">
-        <span className="live-dot" /> {selected ? 'Candidate location' : 'Your next discovery'}
+        <span className="live-dot" />{' '}
+        {selected?.source === 'ai'
+          ? 'Approximate AI reference point'
+          : selected
+            ? 'Candidate location'
+            : 'Your next discovery'}
       </div>
       <div className="map-actions">
         <button
@@ -119,7 +122,9 @@ export default function MapPanel({ candidates, selected, onSelect }) {
           <div>
             <strong>{selected.name}</strong>
             <span>
-              {selected.lat.toFixed(5)}°, {selected.lng.toFixed(5)}°
+              {selected.source === 'ai' ? 'Approx. ' : ''}
+              {selected.lat.toFixed(selected.source === 'ai' ? 3 : 5)}°,{' '}
+              {selected.lng.toFixed(selected.source === 'ai' ? 3 : 5)}°
             </span>
           </div>
         </div>

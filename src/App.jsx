@@ -44,7 +44,11 @@ import {
 } from './lib/domain.mjs';
 import { loadCases, saveCase, saveCases } from './lib/storage.mjs';
 import { exportBackup, importBackup, MAX_BACKUP_BYTES } from './lib/backup.mjs';
-import { mergeAnalysis, validateCandidateEdit } from './lib/investigation.mjs';
+import {
+  mergeAnalysis,
+  validateCandidateEdit,
+  recordAnalysisFeedback,
+} from './lib/investigation.mjs';
 import { demoCase, photoSource } from './data/demo.mjs';
 import catalog from './data/resources.json';
 import Modal from './components/Modal.jsx';
@@ -52,6 +56,7 @@ import PhotoInspector from './components/PhotoInspector.jsx';
 import PhotoComparison from './components/PhotoComparison.jsx';
 import CandidateComparison from './components/CandidateComparison.jsx';
 import AiAccess from './components/AiAccess.jsx';
+import { AnalysisReview, AnalysisCorrection } from './components/AnalysisReview.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
@@ -127,6 +132,7 @@ export default function App() {
   const [dataError, setDataError] = useState('');
   const [backupStatus, setBackupStatus] = useState('');
   const [context, setContext] = useState('');
+  const [includeCorrection, setIncludeCorrection] = useState(true);
   const [note, setNote] = useState('');
   const [dragging, setDragging] = useState(false);
   const input = useRef(null);
@@ -134,7 +140,9 @@ export default function App() {
   const revision = useRef(0);
   const currentRef = useRef(current);
   currentRef.current = current;
-  const selected = current.candidates.find((c) => c.id === selectedId) || current.candidates[0];
+  const selected =
+    current.candidates.find((c) => c.id === selectedId) ||
+    current.candidates.find((c) => c.status !== 'ruled-out');
   const providerName = health.provider === 'openai' ? 'OpenAI' : 'Gemini (Google)';
   const providerKeyName = health.provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY';
   const onSelect = useCallback((id) => setSelectedId(id), []);
@@ -323,7 +331,7 @@ export default function App() {
     flushCurrent();
     revision.current++;
     setCurrent(item);
-    setSelectedId(item.candidates[0]?.id);
+    setSelectedId(item.candidates.find((candidate) => candidate.status !== 'ruled-out')?.id);
     setPage('workspace');
     setContext('');
   }
@@ -391,7 +399,13 @@ export default function App() {
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: current.photo, context }),
+        body: JSON.stringify({
+          image: current.photo,
+          context,
+          ...(includeCorrection && current.analysisFeedback
+            ? { feedback: current.analysisFeedback }
+            : {}),
+        }),
       });
       const result = await response.json();
       if (response.status === 401) setHealth((previous) => ({ ...previous, authenticated: false }));
@@ -437,6 +451,16 @@ export default function App() {
     update({ candidates: [...current.candidates, value] });
     setSelectedId(value.id);
     setModal(null);
+  }
+  function saveAnalysisCorrection(draft) {
+    const value = recordAnalysisFeedback(currentRef.current, draft);
+    update({ analysisFeedback: value.analysisFeedback, candidates: value.candidates });
+    setSelectedId(value.candidates.find((candidate) => candidate.status !== 'ruled-out')?.id);
+    setIncludeCorrection(true);
+    setModal(null);
+    setMessage(
+      'Correction saved locally. Rejected leads will be excluded when you include it in a new analysis.',
+    );
   }
   function toggleClue(id) {
     update({ clues: current.clues.map((c) => (c.id === id ? { ...c, checked: !c.checked } : c)) });
@@ -843,7 +867,7 @@ export default function App() {
                   <strong>A second pair of eyes.</strong>
                   <p>
                     {health.aiEnabled
-                      ? 'Let AI read the scene for architecture, language, terrain and other clues.'
+                      ? 'Compare distinctive details. AI can leave the location undetermined when the evidence is weak.'
                       : 'Extract GPS locally, or connect AI to read the scene and suggest location hypotheses.'}
                   </p>
                 </div>
@@ -869,6 +893,10 @@ export default function App() {
                   <ArrowRight size={15} />
                 </button>
               </div>
+              <AnalysisReview
+                investigation={current}
+                onCorrect={() => setModal('correct-analysis')}
+              />
               <section className="lower-grid">
                 <div className="panel candidates-panel">
                   <div className="panel-header">
@@ -948,6 +976,23 @@ export default function App() {
                         </button>
                       </div>
                       <p>{selected.reason}</p>
+                      {selected.source === 'ai' && (
+                        <p>
+                          Approximate landmark reference point. Camera position and coordinate
+                          accuracy are unknown.
+                        </p>
+                      )}
+                      {selected.visualEvidence && (
+                        <details className="candidate-origin">
+                          <summary>Visual support reported by AI · unverified</summary>
+                          <p>{selected.visualEvidence.distinctiveMatch}</p>
+                          <ul>
+                            {selected.visualEvidence.features.map((feature, i) => (
+                              <li key={i}>{feature}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                       {selected.original && (
                         <details className="candidate-origin">
                           <summary>Original lead · {sourceName(selected.original.source)}</summary>
@@ -1479,8 +1524,9 @@ export default function App() {
             <Sparkles size={26} />
           </div>
           <p>
-            Find visual clues and plausible locations from the architecture, landscape, road signs,
-            and written language.
+            Compare architecture, layout and readable signs. Only locations with distinctive visual
+            support will appear on the map. An undetermined result is possible. No web search or
+            reference-image matching is performed.
           </p>
           <AiAccess health={health} onRefresh={refreshHealth} />
           <label className="notes-label" htmlFor="analysis-context">
@@ -1493,12 +1539,31 @@ export default function App() {
             onChange={(e) => setContext(e.target.value)}
             placeholder="For example: this may be in northern Portugal…"
           />
+          {current.analysisFeedback && (
+            <div className="analysis-correction">
+              <label className="analysis-checkbox">
+                <input
+                  type="checkbox"
+                  checked={includeCorrection}
+                  onChange={(event) => setIncludeCorrection(event.target.checked)}
+                />{' '}
+                Include my correction in this analysis
+              </label>
+              {current.analysisFeedback.knownPlace && (
+                <p>Reported place: {current.analysisFeedback.knownPlace} (user supplied).</p>
+              )}
+              {current.analysisFeedback.rejectedNames.length > 0 && (
+                <p>Rejected leads: {current.analysisFeedback.rejectedNames.join('; ')}.</p>
+              )}
+            </div>
+          )}
           <div className="info-box">
             <ShieldCheck size={18} />
             <p>
-              A resized photo and these clues will be sent to {providerName} through your server.
-              The original file and its EXIF metadata stay in your browser. Results are hypotheses
-              to verify.
+              A resized photo, these clues and any selected correction will be sent to{' '}
+              {providerName} through your server. The original file and its EXIF metadata stay in
+              your browser. Results are hypotheses to verify. Detailed analysis may take longer and
+              use more tokens than before; one request consumes one daily allowance.
             </p>
           </div>
           <button
@@ -1522,6 +1587,13 @@ export default function App() {
             )}
           </button>
         </Modal>
+      )}
+      {modal === 'correct-analysis' && (
+        <AnalysisCorrection
+          investigation={current}
+          onSave={saveAnalysisCorrection}
+          onClose={() => setModal(null)}
+        />
       )}
       {modal === 'settings' && (
         <Modal title="Your workspace" onClose={() => setModal(null)}>

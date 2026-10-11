@@ -144,7 +144,28 @@ The server is intended for personal use. Production AI fails closed unless a 16â
 manual investigation stays public. Sessions use opaque server-side tokens and Secure, HttpOnly,
 SameSite=Strict cookies, expire after 12 hours, and are revoked on logout or server restart.
 Sign-in attempts are throttled. AI accepts same-origin requests, up to five attempts per minute globally,
-two concurrent analyses, a bounded image/context, and 2,000 output tokens. The model is chosen by the server.
+two concurrent analyses, a bounded image/context, and at most 6,000 output tokens (including Gemini thinking).
+The model is chosen by the server. Gemini uses high media resolution and medium thinking on supported
+models; this can increase latency and token costs compared with the earlier minimal setting.
+
+### Analysis quality and corrections
+
+AI first describes visible features, then proposes at most three named public landmarks. The server
+withholds low-confidence guesses, candidates with contradictions, and candidates without at least two
+distinct referenced observations and a distinctive-match description. Retained points remain unverified,
+approximate landmark references; camera position and coordinate accuracy are unknown. Maps do not draw
+an invented accuracy radius. Summary, limitations and next checks are visible in the investigation and reports.
+
+These checks validate the structure of model-reported support, not the truth of that support. The app
+does not perform reverse-image search, web grounding or independent visual matching. A retained candidate
+can still be wrong; an undetermined result is preferable to weak guesses. Earlier results are labelled
+as predating these checks rather than silently being treated as newly validated.
+
+Use **Correct AI result** to record a known place and rule out untouched AI hypotheses without deleting
+them. Corrections remain local until explicitly included in the next analysis dialog. The server excludes
+previously rejected names; investigator-reported places are labelled as user supplied, never as AI recognition.
+Corrections, visual support and the latest assessment survive JSON backup/import and Markdown export.
+Offline tests cover these rules, including weak chateau guesses, but do not measure real recognition accuracy.
 
 `AI_DAILY_LIMIT` defaults to 10 requests per UTC day across all sessions; 0 pauses AI. A reservation is
 made before each provider request, so failed provider attempts also consume the allowance. With

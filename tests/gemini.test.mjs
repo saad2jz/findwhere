@@ -26,13 +26,16 @@ test('Gemini sends inline images and requests bounded structured output without 
         data: 'aGVsbG8=',
       });
       assert.equal(body.contents[0].parts[1].text, input.context);
-      assert.equal(body.generationConfig.maxOutputTokens, 2000);
+      assert.equal(body.generationConfig.maxOutputTokens, 6000);
+      assert.equal(body.generationConfig.mediaResolution, 'MEDIA_RESOLUTION_HIGH');
+      assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'MEDIUM' });
       assert.equal(body.generationConfig.responseMimeType, 'application/json');
       assert.deepEqual(body.generationConfig.responseJsonSchema.required, [
         'summary',
         'clues',
         'candidates',
         'nextSteps',
+        'uncertainties',
       ]);
       return {
         ok: true,

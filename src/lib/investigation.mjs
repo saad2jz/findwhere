@@ -1,5 +1,6 @@
 import {
   analysisSchema,
+  analysisFeedbackSchema,
   candidateSchema,
   caseSchema,
   clueSchema,
@@ -90,6 +91,12 @@ export function mergeAnalysis(previous, response, incomingCandidates) {
   return caseSchema.parse({
     ...previous,
     updatedAt: new Date().toISOString(),
+    analysisReview: {
+      summary: result.summary,
+      uncertainties: result.uncertainties,
+      nextSteps: result.nextSteps,
+      withheldCandidates: result.withheldCandidates,
+    },
     candidates: [
       ...previous.candidates.filter(
         (candidate) => candidate.source !== 'ai' || candidate.status !== 'hypothesis',
@@ -118,5 +125,30 @@ export function mergeAnalysis(previous, response, incomingCandidates) {
       .filter(Boolean)
       .join('\n\n')
       .slice(0, 20000),
+  });
+}
+
+export function recordAnalysisFeedback(previous, { knownPlace, rejectAI }) {
+  const rejected = rejectAI
+    ? previous.candidates.filter(
+        (candidate) => candidate.source === 'ai' && candidate.status === 'hypothesis',
+      )
+    : [];
+  const feedback = analysisFeedbackSchema.parse({
+    knownPlace: knownPlace.trim(),
+    rejectedNames: [
+      ...new Set([
+        ...(previous.analysisFeedback?.rejectedNames || []),
+        ...rejected.map((candidate) => candidate.name),
+      ]),
+    ].slice(-50),
+  });
+  return caseSchema.parse({
+    ...previous,
+    updatedAt: new Date().toISOString(),
+    analysisFeedback: feedback,
+    candidates: previous.candidates.map((candidate) =>
+      rejected.includes(candidate) ? { ...candidate, status: 'ruled-out' } : candidate,
+    ),
   });
 }
