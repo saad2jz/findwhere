@@ -126,8 +126,9 @@ AI_DAILY_LIMIT=10
 AI_USAGE_FILE=.data/ai-usage.json
 ```
 
-Restart the server. Unlock AI access in **Your workspace**, upload a photo and choose **Analyze scene**. The app explains the data transfer before
-the user chooses **Send photo & analyze**. No browser API key field is used and keys are never included in
+Restart the server. Unlock AI access in **Your workspace**, upload a photo and choose **Search this photo**
+(Gemini) or **Analyze scene** (OpenAI). The dialog offers Findwhere search or scene clues only and explains
+the data transfer and request allowance before sending. No browser API key field is used and keys are never included in
 the frontend bundle. Without a key, the rest of the app remains functional and the interface shows setup
 instructions rather than simulated analysis.
 
@@ -174,6 +175,11 @@ are not sent. Gemini receives inline image bytes with no Files API upload; block
 invalid results are rejected. OpenAI requests use `store: false`. Provider data-handling policies still apply
 to each API request. Photos are not automatically uploaded to reverse-image services.
 
+Findwhere search also sends bounded text queries to Wikipedia (or optional Brave Search), Commons and the
+configured geocoder. Retrieved snippets and the photo are sent to Gemini for candidate selection; up to two
+allowlisted Commons previews are sent with the investigation photo for comparison. Cancelling stops subsequent
+stages but does not refund attempted provider requests. Previous saved results remain intact when cancelled.
+
 The map requests tiles from OpenStreetMap or Esri. Map views reveal the viewed area to the tile provider.
 Place searches send the typed query to Nominatim through the server, with an identifying User-Agent, a global
 1.1-second request interval, and a bounded in-memory cache. There is no autocomplete. Configure `GEOCODER_URL`
@@ -189,11 +195,12 @@ The server is intended for personal use. Production AI fails closed unless a 16â
 manual investigation stays public. Sessions use opaque server-side tokens and Secure, HttpOnly,
 SameSite=Strict cookies, expire after 12 hours, and are revoked on logout or server restart.
 Sign-in attempts are throttled. AI accepts same-origin requests, up to five attempts per minute globally,
-two concurrent analyses, a bounded image/context, and at most 6,000 output tokens (including Gemini thinking).
+two concurrent analyses, a bounded image/context, and at most 6,000 output tokens per provider request
+(including Gemini thinking). One search run can make up to four provider requests, each charged separately.
 The model is chosen by the server. Gemini uses high media resolution and medium thinking on supported
 models; this can increase latency and token costs compared with the earlier minimal setting.
 
-### Analysis quality and corrections
+### Scene-only analysis quality and corrections
 
 AI first describes visible features, then proposes at most three named public landmarks. The server
 withholds low-confidence guesses, candidates with contradictions, and candidates without at least two
