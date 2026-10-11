@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { createApp } from '../server/app.mjs';
 
 async function withServer(options, run) {
-  const server = createApp({ apiKey: '', ...options }).listen(0, '127.0.0.1');
+  const server = createApp({
+    apiKey: '',
+    production: false,
+    accessPassword: '',
+    appOrigin: '',
+    dailyLimit: 10,
+    usageFile: '',
+    ...options,
+  }).listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
@@ -26,6 +34,130 @@ const post = (base, body, headers = {}) =>
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
+
+const password = 'test-password-for-ai-only';
+const origin = 'https://findwhere.example';
+const login = (base, value = password, headers = { Origin: origin }) =>
+  fetch(base + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ password: value }),
+  });
+const productionOptions = {
+  production: true,
+  accessPassword: password,
+  appOrigin: origin,
+  analyze: async () => output,
+};
+
+test('production fails closed without a strong password or HTTPS origin', async () => {
+  for (const options of [
+    { accessPassword: '' },
+    { accessPassword: 'short' },
+    { appOrigin: '' },
+    { appOrigin: 'http://unsafe.example' },
+  ]) {
+    await withServer({ ...productionOptions, ...options }, async (base) => {
+      const health = await (await fetch(base + '/api/health')).json();
+      assert.equal(health.aiEnabled, false);
+      assert.equal(health.authenticated, false);
+      assert.equal(
+        (await post(base, input, { Origin: origin })).status,
+        options.appOrigin !== undefined ? 403 : 503,
+      );
+    });
+  }
+});
+test('production requires same-origin authenticated sessions and revokes logout', async () =>
+  withServer(productionOptions, async (base) => {
+    assert.equal((await post(base, input, { Origin: origin })).status, 401);
+    for (const headers of [
+      {},
+      { Origin: 'https://attacker.example' },
+      { Origin: origin, 'Sec-Fetch-Site': 'cross-site' },
+    ]) {
+      assert.equal((await login(base, password, headers)).status, 403);
+    }
+    assert.equal((await login(base, 'wrong')).status, 401);
+    const response = await login(base);
+    assert.equal(response.status, 200);
+    const setCookie = response.headers.get('set-cookie');
+    assert.match(setCookie, /^__Host-findwhere_session=/);
+    for (const flag of ['HttpOnly', 'Secure', 'SameSite=Strict', 'Path=/', 'Max-Age=43200'])
+      assert.ok(setCookie.includes(flag));
+    assert.doesNotMatch(setCookie, new RegExp(password));
+    const Cookie = setCookie.split(';')[0];
+    const health = await (await fetch(base + '/api/health', { headers: { Cookie } })).json();
+    assert.equal(health.authenticated, true);
+    assert.equal(health.dailyRemaining, 10);
+    assert.equal(
+      (await post(base, input, { Origin: origin, Cookie: Cookie + 'tampered' })).status,
+      401,
+    );
+    assert.equal((await post(base, input, { Origin: origin, Cookie })).status, 200);
+    assert.equal((await post(base, input, { Cookie })).status, 403);
+    await fetch(base + '/api/auth/logout', { method: 'POST', headers: { Origin: origin, Cookie } });
+    assert.equal((await post(base, input, { Origin: origin, Cookie })).status, 401);
+  }));
+test('expired sessions and repeated wrong passwords cannot access AI', async () => {
+  let time = Date.parse('2026-10-11T12:00:00Z');
+  await withServer({ ...productionOptions, now: () => time }, async (base) => {
+    const response = await login(base);
+    const Cookie = response.headers.get('set-cookie').split(';')[0];
+    time += 12 * 3600000;
+    assert.equal((await post(base, input, { Origin: origin, Cookie })).status, 401);
+    for (let i = 0; i < 5; i++) assert.equal((await login(base, 'wrong')).status, 401);
+    assert.equal((await login(base)).status, 429);
+    time += 15 * 60000;
+    assert.equal((await login(base)).status, 200);
+  });
+});
+test('daily allowance is shared across sessions and charges failed provider attempts', async () => {
+  let calls = 0;
+  await withServer(
+    {
+      ...productionOptions,
+      dailyLimit: 1,
+      analyze: async () => {
+        calls++;
+        throw new Error('provider-secret');
+      },
+    },
+    async (base) => {
+      const first = (await login(base)).headers.get('set-cookie').split(';')[0];
+      const second = (await login(base)).headers.get('set-cookie').split(';')[0];
+      assert.equal((await post(base, {}, { Origin: origin, Cookie: first })).status, 400);
+      assert.equal((await post(base, input, { Origin: origin, Cookie: first })).status, 502);
+      assert.equal((await post(base, input, { Origin: origin, Cookie: second })).status, 429);
+      assert.equal(calls, 1);
+      const health = await (
+        await fetch(base + '/api/health', { headers: { Cookie: second } })
+      ).json();
+      assert.equal(health.dailyRemaining, 0);
+    },
+  );
+});
+test('concurrent requests never exceed the daily allowance', async () => {
+  let calls = 0;
+  await withServer(
+    {
+      dailyLimit: 1,
+      analyze: async () => {
+        calls++;
+        return output;
+      },
+    },
+    async (base) => {
+      const responses = await Promise.all([
+        post(base, input),
+        post(base, input),
+        post(base, input),
+      ]);
+      assert.equal(responses.filter((response) => response.status === 200).length, 1);
+      assert.equal(calls, 1);
+    },
+  );
+});
 
 test('health exposes configuration status without secrets', async () =>
   withServer({ apiKey: 'test-secret' }, async (base) => {

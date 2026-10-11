@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { analysisSchema, analysisJsonSchema } from '../src/lib/domain.mjs';
+import { createAccess, createDailyQuota } from './security.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requestSchema = z.object({
@@ -21,36 +22,99 @@ export function createApp({
   analyze,
   now = Date.now,
   geocoderUrl = process.env.GEOCODER_URL || 'https://nominatim.openstreetmap.org/search',
+  production = process.env.NODE_ENV === 'production',
+  accessPassword = process.env.AI_ACCESS_PASSWORD || '',
+  appOrigin = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL || '',
+  dailyLimit = Number(process.env.AI_DAILY_LIMIT ?? 10),
+  usageFile = process.env.AI_USAGE_FILE || '',
 } = {}) {
   const app = express();
+  const access = createAccess({
+    password: accessPassword,
+    required: production || Boolean(accessPassword),
+    secure: production,
+    now,
+  });
+  const quota = createDailyQuota({ limit: dailyLimit, file: usageFile, now });
+  let originConfigured = !production;
+  try {
+    const url = new URL(appOrigin);
+    originConfigured = !production || (url.protocol === 'https:' && url.origin === appOrigin);
+  } catch {
+    /* Production AI stays disabled without a valid HTTPS origin. */
+  }
+  const aiConfigured =
+    Boolean(apiKey || analyze) && access.configured && originConfigured && dailyLimit > 0;
   let lastGeocode = -Infinity;
   const cache = new Map();
   const attempts = new Map();
   let runningAnalysis = 0;
+  let globalAttempts = { start: now(), count: 0 };
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.set('X-Frame-Options', 'DENY');
+    if (production) {
+      res.set('Strict-Transport-Security', 'max-age=31536000');
+      res.set(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://server.arcgisonline.com; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+      );
+    }
     if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
-    // Browser requests must originate from this local app; no wildcard CORS.
+    // Production uses one configured HTTPS origin; CLI clients must send it too.
     const origin = req.get('origin');
     if (
       req.method === 'POST' &&
-      origin &&
-      ![
-        `${req.protocol}://${req.get('host')}`,
-        'http://127.0.0.1:5173',
-        'http://localhost:5173',
-      ].includes(origin)
+      (production
+        ? !originConfigured || origin !== appOrigin || req.get('sec-fetch-site') === 'cross-site'
+        : origin &&
+          ![
+            `${req.protocol}://${req.get('host')}`,
+            'http://127.0.0.1:5173',
+            'http://localhost:5173',
+          ].includes(origin))
     ) {
       return res.status(403).json({ error: 'This request must come from the Findwhere app.' });
     }
     next();
   });
+  app.post('/api/auth/login', express.json({ limit: '2kb' }), access.login);
+  app.post('/api/auth/logout', access.logout);
+  app.use('/api/analyze', (req, res, next) => {
+    if (!access.configured || !originConfigured)
+      return res
+        .status(503)
+        .json({
+          error:
+            'AI access is not configured securely. The operator must set AI_ACCESS_PASSWORD and an HTTPS APP_ORIGIN.',
+        });
+    if (!access.authorized(req))
+      return res.status(401).json({ error: 'Sign in to AI access before sending an image.' });
+    next();
+  });
   app.use(express.json({ limit: '6mb' }));
-  app.get('/api/health', (req, res) =>
-    res.json({ ok: true, aiEnabled: Boolean(apiKey || analyze), model: apiKey ? model : null }),
-  );
+  app.get('/api/health', async (req, res) => {
+    const authenticated = access.authorized(req);
+    let usage = {};
+    if (authenticated) {
+      try {
+        usage = await quota.status();
+      } catch {
+        usage = { usageUnavailable: true };
+      }
+    }
+    res.json({
+      ok: true,
+      aiEnabled: aiConfigured && !usage.usageUnavailable,
+      model: aiConfigured ? model : null,
+      authRequired: access.required,
+      authConfigured: access.configured,
+      authenticated,
+      ...usage,
+    });
+  });
 
   app.get('/api/geocode', async (req, res) => {
     const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
@@ -103,32 +167,35 @@ export function createApp({
       cache.set(key, { time: now(), results });
       return res.json({ results, attribution: '© OpenStreetMap contributors' });
     } catch {
-      return res
-        .status(502)
-        .json({
-          error: 'Place search is unavailable. You can still add a candidate by coordinates.',
-        });
+      return res.status(502).json({
+        error: 'Place search is unavailable. You can still add a candidate by coordinates.',
+      });
     }
   });
 
   app.post('/api/analyze', async (req, res) => {
     if (!apiKey && !analyze)
-      return res
-        .status(503)
-        .json({
-          error:
-            'AI analysis is not configured. Add OPENAI_API_KEY to the server’s .env file and restart. GPS extraction and manual investigation already work.',
-        });
+      return res.status(503).json({
+        error:
+          'AI analysis is not configured. Add OPENAI_API_KEY to the server’s .env file and restart. GPS extraction and manual investigation already work.',
+      });
+    if (!dailyLimit)
+      return res.status(429).json({ error: 'AI analysis is paused by the operator.' });
     const input = requestSchema.safeParse(req.body);
     if (!input.success)
-      return res
-        .status(400)
-        .json({
-          error:
-            'Provide a JPEG, PNG, or WebP image under 3.5 MB and no more than 2,000 characters of context.',
-        });
+      return res.status(400).json({
+        error:
+          'Provide a JPEG, PNG, or WebP image under 3.5 MB and no more than 2,000 characters of context.',
+      });
     const clientKey = req.ip || 'local';
     const bucket = attempts.get(clientKey);
+    if (now() - globalAttempts.start >= 60_000) globalAttempts = { start: now(), count: 0 };
+    if (globalAttempts.count >= 5)
+      return res
+        .status(429)
+        .json({
+          error: 'Five analyses per minute are allowed on this server. Please try again shortly.',
+        });
     if (bucket && now() - bucket.start < 60_000 && bucket.count >= 5)
       return res
         .status(429)
@@ -137,7 +204,9 @@ export function createApp({
       return res
         .status(429)
         .json({ error: 'Two analyses are already running. Please try again shortly.' });
-    if (attempts.size > 1000) attempts.clear();
+    for (const [key, value] of attempts) if (now() - value.start >= 60_000) attempts.delete(key);
+    if (!bucket && attempts.size >= 1000)
+      return res.status(429).json({ error: 'Server busy. Please try again shortly.' });
     attempts.set(
       clientKey,
       bucket && now() - bucket.start < 60_000
@@ -145,7 +214,14 @@ export function createApp({
         : { start: now(), count: 1 },
     );
     runningAnalysis++;
+    globalAttempts.count++;
     try {
+      if (!(await quota.reserve()))
+        return res
+          .status(429)
+          .json({
+            error: 'The server’s daily analysis limit has been reached. Try again after 00:00 UTC.',
+          });
       let result;
       if (analyze) result = await analyze(input.data);
       else {
@@ -175,32 +251,26 @@ export function createApp({
               schema: analysisJsonSchema,
             },
           },
-          max_output_tokens: 3000,
+          max_output_tokens: 2000,
         });
         if (!response.output_text)
-          return res
-            .status(422)
-            .json({
-              error: 'The model could not analyze this image. Try a landscape or a wider view.',
-            });
+          return res.status(422).json({
+            error: 'The model could not analyze this image. Try a landscape or a wider view.',
+          });
         result = JSON.parse(response.output_text);
       }
       const validated = analysisSchema.safeParse(result);
       if (!validated.success)
-        return res
-          .status(502)
-          .json({
-            error:
-              'The model returned an invalid result. No candidates were saved; please try again.',
-          });
+        return res.status(502).json({
+          error:
+            'The model returned an invalid result. No candidates were saved; please try again.',
+        });
       return res.json({ ...validated.data, source: 'ai', verified: false });
     } catch {
-      return res
-        .status(502)
-        .json({
-          error:
-            'AI analysis failed. Check the server API key, model access, and connection, then try again.',
-        });
+      return res.status(502).json({
+        error:
+          'AI analysis failed. Check the server API key, model access, and connection, then try again.',
+      });
     } finally {
       runningAnalysis--;
     }

@@ -12,7 +12,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
-COPY src/lib/domain.mjs ./src/lib/domain.mjs
+COPY src/lib ./src/lib
 USER node
 EXPOSE 8787
 CMD ["node", "server/index.mjs"]

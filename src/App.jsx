@@ -51,6 +51,7 @@ import Modal from './components/Modal.jsx';
 import PhotoInspector from './components/PhotoInspector.jsx';
 import PhotoComparison from './components/PhotoComparison.jsx';
 import CandidateComparison from './components/CandidateComparison.jsx';
+import AiAccess from './components/AiAccess.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
@@ -135,17 +136,23 @@ export default function App() {
   currentRef.current = current;
   const selected = current.candidates.find((c) => c.id === selectedId) || current.candidates[0];
   const onSelect = useCallback((id) => setSelectedId(id), []);
+  const refreshHealth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/health');
+      if (!response.ok) throw new Error('Unavailable');
+      setHealth(await response.json());
+    } catch {
+      setHealth({ aiEnabled: false, offline: true });
+    }
+  }, []);
 
   useEffect(() => {
     loadCases()
       .then(setCases)
       .catch((error) => setMessage(error.message))
       .finally(() => setReady(true));
-    fetch('/api/health')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then(setHealth)
-      .catch(() => setHealth({ aiEnabled: false, offline: true }));
-  }, []);
+    refreshHealth();
+  }, [refreshHealth]);
   useEffect(() => {
     if (current.demo) {
       setSaveStatus('Sample investigation');
@@ -375,6 +382,7 @@ export default function App() {
   }
   async function analyzePhoto() {
     if (!current.photo || current.demo || busy) return;
+    if (health.authRequired && !health.authenticated) return;
     setBusy('analysis');
     const requestRevision = revision.current;
     try {
@@ -384,6 +392,7 @@ export default function App() {
         body: JSON.stringify({ image: current.photo, context }),
       });
       const result = await response.json();
+      if (response.status === 401) setHealth((previous) => ({ ...previous, authenticated: false }));
       if (!response.ok) throw new Error(result.error || 'Analysis failed. Please try again.');
       if (requestRevision !== revision.current) return;
       const candidates = result.candidates.map((c) => ({
@@ -405,6 +414,7 @@ export default function App() {
     } catch (error) {
       setMessage(error.message);
     } finally {
+      refreshHealth();
       setBusy('');
     }
   }
@@ -1470,6 +1480,7 @@ export default function App() {
             Find visual clues and plausible locations from the architecture, landscape, road signs,
             and written language.
           </p>
+          <AiAccess health={health} onRefresh={refreshHealth} />
           <label className="notes-label" htmlFor="analysis-context">
             Any clues you already have? <span>(optional)</span>
           </label>
@@ -1491,7 +1502,12 @@ export default function App() {
           <button
             className="button primary full-width"
             onClick={analyzePhoto}
-            disabled={Boolean(busy)}
+            disabled={
+              Boolean(busy) ||
+              !health.aiEnabled ||
+              (health.authRequired && !health.authenticated) ||
+              health.dailyRemaining === 0
+            }
           >
             {busy === 'analysis' ? (
               <>
@@ -1532,16 +1548,20 @@ export default function App() {
             GPS extraction, location candidates, place search, evidence notes, and the resource
             library work without an AI key.
           </p>
+          <AiAccess health={health} onRefresh={refreshHealth} />
           {!health.aiEnabled && (
             <>
               <p>
-                To enable scene analysis, create a <code>.env</code> file on the server from{' '}
-                <code>.env.example</code>, set <code>OPENAI_API_KEY</code>, and restart the app.
+                App owner: configure <code>OPENAI_API_KEY</code> and a 16–200 character{' '}
+                <code>AI_ACCESS_PASSWORD</code> in your hosting dashboard, or use{' '}
+                <code>.env.example</code> locally. Redeploy after updating server settings.
               </p>
               <pre>
                 OPENAI_API_KEY=your-key-here
                 <br />
                 OPENAI_MODEL=gpt-4.1-mini
+                <br />
+                AI_ACCESS_PASSWORD=your-private-password
               </pre>
               <p className="subtle">
                 Keep the key on the server. No API key is stored in your browser or included in the

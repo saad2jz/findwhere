@@ -3341,3 +3341,27 @@ dialog::backdrop {
     font-size: 12px;
   }
 }
+.ai-access {
+  border: 1px solid var(--border, #dce2d9);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0;
+  background: #f6f8f3;
+}
+.ai-access > strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.password-field {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.password-field input {
+  flex: 1;
+  min-width: 0;
+}
+.ai-access .form-error {
+  color: #9b2929;
+}

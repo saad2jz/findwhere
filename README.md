@@ -75,9 +75,12 @@ Copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell), the
 ```dotenv
 OPENAI_API_KEY=your-server-key
 OPENAI_MODEL=gpt-4.1-mini
+AI_ACCESS_PASSWORD=choose-a-long-private-password
+AI_DAILY_LIMIT=10
+AI_USAGE_FILE=.data/ai-usage.json
 ```
 
-Restart the server. Upload a photo and choose **Analyze scene**. The app explains the data transfer before
+Restart the server. Unlock AI access in **Your workspace**, upload a photo and choose **Analyze scene**. The app explains the data transfer before
 the user chooses **Send photo & analyze**. No browser API key field is used and keys are never included in
 the frontend bundle. Without a key, the rest of the app remains functional and the interface shows setup
 instructions rather than simulated analysis.
@@ -124,9 +127,39 @@ Research links open external sites; contextual map links embed the selected cand
 directory entries open a landing page for manual input, rather than claiming a native service integration.
 Network failures show a useful fallback; manual coordinates and case notes still work.
 
-The server is intended for personal use. Before exposing a deployment that can spend your API credit, put it
-behind authentication. Built-in origin checks, image-size validation, five AI requests per minute per client,
-and a two-analysis concurrency limit are basic protections, not multi-user authentication or billing controls.
+The server is intended for personal use. Production AI fails closed unless a 16–200 character
+`AI_ACCESS_PASSWORD` and an HTTPS application origin are configured. The password unlocks only AI;
+manual investigation stays public. Sessions use opaque server-side tokens and Secure, HttpOnly,
+SameSite=Strict cookies, expire after 12 hours, and are revoked on logout or server restart.
+Sign-in attempts are throttled. AI accepts same-origin requests, up to five attempts per minute globally,
+two concurrent analyses, a bounded image/context, and 2,000 output tokens. The model is chosen by the server.
+
+`AI_DAILY_LIMIT` defaults to 10 requests per UTC day across all sessions; 0 pauses AI. A reservation is
+made before each provider request, so failed provider attempts also consume the allowance. With
+`AI_USAGE_FILE`, reservations are written before contacting OpenAI and survive process restarts while the
+file survives; corrupt or inaccessible state blocks analysis. Without a file, limits reset on restart.
+This is a single-instance allowance, not a durable financial cap: deleting hosting storage, deploying
+to an ephemeral filesystem, or running independent instances can reset/multiply it. Monitor spending
+in the provider dashboard and keep the access password private. No automatic retries are made.
+
+## Deploy on Render
+
+Create a **Web Service** from this repository's `main` branch, runtime **Node**, free instance,
+build command `npm ci && npm run build`, start command `npm start`, and health path `/api/health`.
+Set `NODE_VERSION=24.15.0`, `NODE_ENV=production`, `HOST=0.0.0.0`, `OPENAI_MODEL=gpt-4.1-mini`,
+`AI_DAILY_LIMIT=10`, and `AI_USAGE_FILE=.data/ai-usage.json`. Render supplies `PORT` and
+`RENDER_EXTERNAL_URL`; for a custom domain set `APP_ORIGIN` to its exact HTTPS origin (no trailing slash).
+Add `OPENAI_API_KEY` and `AI_ACCESS_PASSWORD` privately in Render's Environment settings, then redeploy.
+Without either secret the public manual app still works and AI cannot spend credit.
+
+The [free instance](https://render.com/docs/free) sleeps after 15 minutes without traffic and has
+ephemeral storage. Its quota file can disappear on restart, redeploy, or spin-down. Browser investigations
+remain on each device; export a backup before switching devices. Durable shared quotas require persistent
+storage and coordinated reservations before scaling beyond one instance.
+
+To verify the real integration, unlock AI, upload the included public `public/lisbon.jpg` sample,
+and explicitly send one analysis. Check for real returned clues, unverified candidate labels, a decremented
+allowance, and rejection after locking access. Local regression tests use mocks and do not prove provider access.
 
 ## Test and build
 
