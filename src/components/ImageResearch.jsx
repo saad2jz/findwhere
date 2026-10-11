@@ -30,11 +30,17 @@ export default function ImageResearch({ investigation, placeName, onReference, d
       const blob = await response.blob();
       const clean = await readPhoto(new File([blob], 'findwhere-search.jpg', { type: blob.type }));
       if (token !== version.current) return;
+      const searchBlob = await (await fetch(clean.photo)).blob();
+      if (token !== version.current) return;
+      const downloadUrl = URL.createObjectURL(searchBlob);
       const link = document.createElement('a');
-      link.href = clean.photo;
+      link.href = downloadUrl;
       link.download = 'findwhere-search.jpg';
+      document.body.appendChild(link);
       link.click();
-      setStatus('Search copy downloaded. Open Lens or TinEye and upload it there.');
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 10000);
+      setStatus('Search copy download started. Open Lens or TinEye and upload it there.');
     } catch {
       if (token === version.current)
         setError('Could not prepare the search copy. Try another photo.');
