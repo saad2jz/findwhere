@@ -136,3 +136,70 @@ test('correction transmission is explicit data and does not claim independent ve
   assert.deepEqual(context.investigatorCorrection, feedback);
   assert.match(context.note, /not independently verified/);
 });
+
+test('low-confidence proposals become actionable leads without leaking guessed map coordinates', () => {
+  const result = assessAnalysis({ ...output, candidates: [{ ...candidate, confidence: 'low' }] });
+  assert.deepEqual(result.candidates, []);
+  assert.equal(result.researchLeads[0].name, candidate.name);
+  assert.equal(result.researchLeads[0].kind, 'place');
+  assert.match(result.researchLeads[0].query, /Public landmark, France/);
+  assert.match(result.researchLeads[0].uncertainty, /Insufficient/);
+  assert.equal(result.researchLeads[0].lat, undefined);
+  assert.equal(result.researchLeads[0].lng, undefined);
+});
+
+const lead = {
+  name: 'A possible region',
+  kind: 'region',
+  query: 'region facade garden reference',
+  reason: 'Investigate the combination of facade materials and garden layout.',
+  uncertainty: 'These features occur in multiple regions.',
+  supportingClueIndexes: [0, 1],
+};
+
+test('a model can return useful research leads with no mapped candidates', () => {
+  const result = assessAnalysis({ ...output, candidates: [], leads: [lead] });
+  assert.deepEqual(result.candidates, []);
+  assert.equal(result.researchLeads[0].kind, 'region');
+  assert.equal(result.researchLeads[0].query, lead.query);
+  assert.deepEqual(
+    result.researchLeads[0].features,
+    output.clues.map((c) => c.text),
+  );
+  assert.match(result.summary, /undetermined/);
+});
+
+test('rejected names, duplicate or invalid observations cannot return as geographic leads', () => {
+  for (const change of [
+    { name: 'Château de Fontainebleau' },
+    { query: 'Castle of Fontainebleau facade photos' },
+    { supportingClueIndexes: [0, 0] },
+    { supportingClueIndexes: [0, 11] },
+  ]) {
+    const result = assessAnalysis(
+      { ...output, candidates: [], leads: [{ ...lead, ...change }] },
+      { knownPlace: '', rejectedNames: ['Fontainebleau'] },
+    );
+    assert.ok(result.researchLeads.every((item) => item.kind === 'feature'));
+  }
+  const duplicate = assessAnalysis({ ...output, candidates: [], leads: [lead, lead] });
+  assert.equal(duplicate.researchLeads.length, 1);
+});
+
+test('empty recognition offers observed-feature queries, while an image without clues gets no invented place', () => {
+  const result = assessAnalysis({ ...output, candidates: [] });
+  assert.equal(result.researchLeads.length, 2);
+  assert.ok(result.researchLeads.every((item) => item.kind === 'feature'));
+  assert.equal(result.researchLeads[0].query, output.clues[0].text);
+  assert.deepEqual(assessAnalysis({ ...output, candidates: [], clues: [] }).researchLeads, []);
+});
+
+test('research leads persist in backups and reports without becoming map candidates', () => {
+  const result = assessAnalysis({ ...output, candidates: [], leads: [lead] });
+  const investigation = mergeAnalysis(createCase('Research regression fixture'), result);
+  const restored = importBackup(exportBackup([investigation]))[0];
+  assert.deepEqual(restored.analysisReview.researchLeads, result.researchLeads);
+  assert.deepEqual(restored.candidates, []);
+  assert.match(exportReport(restored), /Research lead \(region, unverified\)/);
+  assert.match(exportReport(restored), /These features occur in multiple regions/);
+});

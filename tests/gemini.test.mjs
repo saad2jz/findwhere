@@ -30,12 +30,18 @@ test('Gemini sends inline images and requests bounded structured output without 
       assert.equal(body.generationConfig.mediaResolution, 'MEDIA_RESOLUTION_HIGH');
       assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: 'MEDIUM' });
       assert.equal(body.generationConfig.responseMimeType, 'application/json');
+      const leadProperties =
+        body.generationConfig.responseJsonSchema.properties.leads.items.properties;
+      assert.equal(leadProperties.lat, undefined);
+      assert.equal(leadProperties.lng, undefined);
+      assert.ok(leadProperties.supportingClueIndexes);
       assert.deepEqual(body.generationConfig.responseJsonSchema.required, [
         'summary',
         'clues',
         'candidates',
         'nextSteps',
         'uncertainties',
+        'leads',
       ]);
       return {
         ok: true,

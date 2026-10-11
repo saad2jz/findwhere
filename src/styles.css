@@ -3507,6 +3507,27 @@ dialog::backdrop {
   font-size: 15px;
   margin: 16px 0 8px;
 }
+.research-lead-list {
+  display: grid;
+  gap: 16px;
+  margin-block: 16px;
+}
+.research-lead {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.research-lead > strong {
+  display: block;
+  margin-bottom: 8px;
+}
+.research-lead .button {
+  white-space: normal;
+  min-height: 44px;
+  max-width: 100%;
+}
 .analysis-review p,
 .analysis-review li,
 .analysis-review summary {

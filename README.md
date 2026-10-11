@@ -56,6 +56,13 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
 - **Reports:** downloadable Markdown containing metadata, coordinates, evidence, sources, notes, and verification steps.
 - **Optional real AI scene analysis:** the server calls Gemini (Google) or OpenAI, returning visible clues and unverified
   location hypotheses with qualitative confidence. A configured server API key is required.
+- **Research leads when identification is uncertain:** possible places, regions, or visible-feature searches remain
+  separate from map candidates, with their supporting observations and uncertainty. Low-confidence place proposals
+  and unresolved map references are preserved as research leads rather than silently discarded. Choose **Find reference
+  photos for this lead** to open image research with its query. When no geographic proposal is grounded in the photo,
+  the app offers searches derived from visible clues; it does not fabricate locations to fill an empty list.
+  Leads have no coordinates, survive backups/reports, and do not change candidate status. Older empty assessments
+  can show feature searches from their saved AI clues; analyze again to request the new place/region lead output.
 - **Responsive interface:** desktop workspace and mobile layouts, keyboard controls, dialogs, and reduced-motion support.
 
 The initial Lisbon sample is explicitly labelled. Its main camera location comes from the published source;

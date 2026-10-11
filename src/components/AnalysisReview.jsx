@@ -1,11 +1,22 @@
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import Modal from './Modal.jsx';
+import { featureSearchLeads } from '../lib/research-leads.mjs';
 
-export function AnalysisReview({ investigation, onCorrect }) {
+export function AnalysisReview({ investigation, onCorrect, onResearch }) {
   const review = investigation.analysisReview;
   const feedback = investigation.analysisFeedback;
   const legacy = !review && investigation.candidates.some((candidate) => candidate.source === 'ai');
+  const hasMapHypothesis = investigation.candidates.some(
+    (candidate) => candidate.source === 'ai' && candidate.status !== 'ruled-out',
+  );
+  const leads = review?.researchLeads?.length
+    ? review.researchLeads
+    : review && !hasMapHypothesis
+      ? featureSearchLeads(
+          investigation.clues.filter((clue) => clue.source === 'AI scene analysis'),
+        )
+      : [];
   if (!review && !feedback && !legacy) return null;
   return (
     <section className="analysis-review" aria-label="AI assessment">
@@ -21,6 +32,60 @@ export function AnalysisReview({ investigation, onCorrect }) {
       {review && (
         <>
           <p>{review.summary}</p>
+          {leads.length > 0 && (
+            <section className="research-leads" aria-label="Research leads">
+              <h3>Research leads · not identified locations</h3>
+              <p>
+                These suggestions give you something to check. They have no map coordinates and do
+                not confirm where the photo was taken.
+              </p>
+              <div className="research-lead-list">
+                {leads.map((lead, index) => (
+                  <article className="research-lead" key={`${lead.name}-${index}`}>
+                    <strong>{lead.name}</strong>
+                    <span className="tag">
+                      {lead.kind === 'place'
+                        ? 'Possible place'
+                        : lead.kind === 'region'
+                          ? 'Possible region'
+                          : 'Feature search'}{' '}
+                      · unverified
+                    </span>
+                    <p>{lead.reason}</p>
+                    <p>
+                      <strong>Uncertainty:</strong> {lead.uncertainty}
+                    </p>
+                    <details>
+                      <summary>Observations behind this lead</summary>
+                      <ul>
+                        {lead.features.map((feature, i) => (
+                          <li key={i}>{feature}</li>
+                        ))}
+                      </ul>
+                    </details>
+                    <p>
+                      <strong>Search:</strong> {lead.query}
+                    </p>
+                    {onResearch && investigation.photo && (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => onResearch(lead.query)}
+                      >
+                        Find reference photos for this lead
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+          {!leads.length && !hasMapHypothesis && (
+            <p>
+              No usable location lead was found. Add a wider photo, readable signage, or any known
+              country or region, then analyze again.
+            </p>
+          )}
           {review.withheldCandidates > 0 && (
             <p>
               <strong>

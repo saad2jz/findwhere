@@ -98,6 +98,7 @@ export function mergeAnalysis(previous, response, incomingCandidates) {
       uncertainties: result.uncertainties,
       nextSteps: result.nextSteps,
       withheldCandidates: result.withheldCandidates,
+      researchLeads: result.researchLeads,
     },
     candidates: [
       ...previous.candidates.filter(

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { comparisonSchema, comparisonVerdicts } from './image-research.mjs';
 import { compareCandidates, formatBearing, formatDistance } from './geo.mjs';
+import { researchLeadSchema, modelLeadSchema, modelLeadsJsonSchema } from './research-leads.mjs';
 
 export const pointSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
@@ -27,6 +28,7 @@ const analysisReviewSchema = z.object({
   uncertainties: z.array(z.string().max(500)).max(8),
   nextSteps: z.array(z.string().max(500)).max(8),
   withheldCandidates: z.number().int().min(0).max(5),
+  researchLeads: z.array(researchLeadSchema).max(3).default([]),
 });
 const candidateDetailsSchema = pointSchema.extend({
   name: z.string().min(1).max(300),
@@ -337,6 +339,16 @@ export function exportReport(investigation, { originId } = {}) {
     for (const uncertainty of data.analysisReview.uncertainties)
       lines.push(`- Limitation: ${md(uncertainty)}`);
     for (const step of data.analysisReview.nextSteps) lines.push(`- Next check: ${md(step)}`);
+    for (const lead of data.analysisReview.researchLeads) {
+      lines.push(
+        '',
+        `### Research lead (${lead.kind}, unverified): ${md(lead.name)}`,
+        `Search query: ${md(lead.query)}`,
+        `Reason: ${md(lead.reason)}`,
+        `Uncertainty: ${md(lead.uncertainty)}`,
+        ...lead.features.map((feature) => `- Reported observation: ${md(feature)}`),
+      );
+    }
     lines.push('');
   }
   if (data.analysisFeedback) {
@@ -397,13 +409,16 @@ export const analysisSchema = z.object({
   nextSteps: z.array(z.string().max(500)).max(8),
   uncertainties: z.array(z.string().max(500)).max(8).default([]),
   withheldCandidates: z.number().int().min(0).max(5).default(0),
+  researchLeads: z.array(researchLeadSchema).max(3).default([]),
+  leads: z.array(modelLeadSchema).max(3).default([]),
 });
 
 export const analysisJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['summary', 'clues', 'candidates', 'nextSteps', 'uncertainties'],
+  required: ['summary', 'clues', 'candidates', 'nextSteps', 'uncertainties', 'leads'],
   properties: {
+    leads: modelLeadsJsonSchema,
     summary: { type: 'string' },
     clues: {
       type: 'array',

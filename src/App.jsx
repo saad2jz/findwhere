@@ -123,6 +123,7 @@ export default function App() {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [modal, setModal] = useState(null);
+  const [researchQuery, setResearchQuery] = useState('');
   const [editingEvidence, setEditingEvidence] = useState(null);
   const [tab, setTab] = useState('evidence');
   const [category, setCategory] = useState('all');
@@ -425,7 +426,9 @@ export default function App() {
       setMessage(
         candidates.length
           ? 'Scene analysis added. Verify these hypotheses against independent imagery.'
-          : 'Clues added. The scene was too ambiguous for a location candidate.',
+          : result.researchLeads?.length
+            ? `${result.researchLeads.length} research lead${result.researchLeads.length === 1 ? '' : 's'} added. No precise location identified; check the reference photos.`
+            : 'Clues added. No usable location lead was found; try a wider photo or add geographic context.',
       );
       setModal(null);
     } catch (error) {
@@ -775,7 +778,13 @@ export default function App() {
                     </h2>
                     <div className="photo-panel-actions">
                       {current.photo && (
-                        <button className="text-button" onClick={() => setModal('image-research')}>
+                        <button
+                          className="text-button"
+                          onClick={() => {
+                            setResearchQuery('');
+                            setModal('image-research');
+                          }}
+                        >
                           <Search size={14} /> Image search
                         </button>
                       )}
@@ -921,7 +930,7 @@ export default function App() {
                   <strong>A second pair of eyes.</strong>
                   <p>
                     {health.aiEnabled
-                      ? 'Compare distinctive details. AI can leave the location undetermined when the evidence is weak.'
+                      ? 'Get location hypotheses or research leads based on visible details, then check reference photos.'
                       : 'Extract GPS locally, or connect AI to read the scene and suggest location hypotheses.'}
                   </p>
                 </div>
@@ -950,6 +959,10 @@ export default function App() {
               <AnalysisReview
                 investigation={current}
                 onCorrect={() => setModal('correct-analysis')}
+                onResearch={(query) => {
+                  setResearchQuery(query);
+                  setModal('image-research');
+                }}
               />
               <section className="lower-grid">
                 <div className="panel candidates-panel">
@@ -1594,7 +1607,11 @@ export default function App() {
           onChange={(reference) => update({ reference })}
           onClose={() => setModal(null)}
           startResearch={modal === 'image-research'}
-          placeName={selected?.name || current.analysisFeedback?.knownPlace}
+          placeName={
+            (modal === 'image-research' && researchQuery) ||
+            selected?.name ||
+            current.analysisFeedback?.knownPlace
+          }
           health={health}
           providerName={providerName}
           onRefreshHealth={refreshHealth}
@@ -1616,8 +1633,9 @@ export default function App() {
           </div>
           <p>
             Compare architecture, layout and readable signs. Only locations with distinctive visual
-            support will appear on the map. An undetermined result is possible. No web search or
-            reference-image matching is performed.
+            support will appear on the map. Uncertain places, regions and feature searches appear
+            separately as research leads. An undetermined result is possible. This scene analysis
+            does not perform a web search or match reference images automatically.
           </p>
           <AiAccess health={health} onRefresh={refreshHealth} />
           <label className="notes-label" htmlFor="analysis-context">

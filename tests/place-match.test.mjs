@@ -69,6 +69,10 @@ test('geocoder failures keep clues and withhold the AI point rather than using a
   assert.equal(result.withheldCandidates, 1);
   assert.deepEqual(result.clues, assessment.clues);
   assert.match(result.uncertainties[0], /Château de Sceaux.*not placed on the map/);
+  assert.equal(result.researchLeads[0].name, candidate.name);
+  assert.equal(result.researchLeads[0].lat, undefined);
+  assert.equal(result.researchLeads[0].lng, undefined);
+  assert.match(result.summary, /undetermined/);
 });
 
 test('resolved map provenance survives merging, backup, export and manual coordinate changes', async () => {

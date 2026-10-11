@@ -52,6 +52,39 @@ const productionOptions = {
   analyze: async () => output,
 };
 
+test('scene API returns research leads when no precise location is recognized, without geocoding', async () => {
+  await withServer(
+    {
+      analyze: async () => ({
+        ...output,
+        leads: [
+          {
+            name: 'Terrain search',
+            kind: 'feature',
+            query: 'low hill landscape reference',
+            reason: 'Compare terrain in reference photos.',
+            uncertainty: 'A hill alone cannot locate the scene.',
+            supportingClueIndexes: [0],
+          },
+        ],
+      }),
+      fetcher: async () => {
+        throw new Error('Research leads must not trigger a geocoder request');
+      },
+    },
+    async (base) => {
+      const response = await post(base, input);
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.deepEqual(result.candidates, []);
+      assert.equal(result.researchLeads[0].name, 'Terrain search');
+      assert.equal(result.researchLeads[0].lat, undefined);
+      assert.equal(result.verified, false);
+      assert.match(result.summary, /research leads/);
+    },
+  );
+});
+
 test('production fails closed without a strong password or HTTPS origin', async () => {
   for (const options of [
     { accessPassword: '' },
