@@ -145,7 +145,7 @@ in the provider dashboard and keep the access password private. No automatic ret
 ## Deploy on Render
 
 Create a **Web Service** from this repository's `main` branch, runtime **Node**, free instance,
-build command `npm ci && npm run build`, start command `npm start`, and health path `/api/health`.
+build command `npm ci --include=dev && npm run build`, start command `npm start`, and health path `/api/health`.
 Set `NODE_VERSION=24.15.0`, `NODE_ENV=production`, `HOST=0.0.0.0`, `OPENAI_MODEL=gpt-4.1-mini`,
 `AI_DAILY_LIMIT=10`, and `AI_USAGE_FILE=.data/ai-usage.json`. Render supplies `PORT` and
 `RENDER_EXTERNAL_URL`; for a custom domain set `APP_ORIGIN` to its exact HTTPS origin (no trailing slash).
