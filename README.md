@@ -19,6 +19,22 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   The reference is saved with the investigation and included in JSON backups; its source and notes appear in reports.
   Replacing the reference clears its old source and notes. A removed reference can be restored with **Undo**
   while the dialog stays open. No candidate is automatically marked verified.
+- **Reverse image research:** choose **Image search**, download a resized JPEG without embedded metadata,
+  and open Google Lens or TinEye to upload it yourself. Save a useful result photo or screenshot and import
+  it as the reference. This assisted workflow does not automatically upload images, scrape results, or use a paid search API.
+  [Google's supported upload workflow](https://support.google.com/websearch/answer/1325808?hl=en).
+- **Sourced reference discovery:** search Wikimedia Commons by place name or feature, inspect up to six
+  raster previews with author, license, declared date and original file-page links, then choose **Use reference**.
+  The preview and attribution are saved locally. Text search results are leads, not reverse-image matches.
+- **AI image comparison:** after adding a reference, unlock AI, consent to sending the two resized images,
+  and choose **Compare with AI**. Gemini (or the configured OpenAI alternative) reports paired observations,
+  matches, contradictions and limits. A supported verdict requires at least two distinct model-reported features
+  and no reported contradiction; ambiguous cases remain inconclusive. This does not verify a reference label,
+  identify the exact camera position, or automatically change any candidate's status or coordinates.
+  Comparison uses the same password, rate limits and daily allowance as scene analysis; both images count
+  toward a combined request size limit. It can cost more image tokens than one-photo analysis. Source URLs,
+  notes and investigator corrections are not sent in comparison requests. Results, attribution and timestamps
+  survive backups and reports; replacing the reference clears the old comparison.
 - **Investigation map:** interactive candidate markers, street/satellite layers, zoom, recentering, and external
   Google Maps/Street View links.
 - **Location candidates:** search named places or enter WGS84 coordinates; refine names, points, confidence,
@@ -163,8 +179,10 @@ saved AI candidates without calling AI again. This resolves a named landmark, no
 and does not prove that the landmark was correctly recognized. Maps do not draw
 an invented accuracy radius. Summary, limitations and next checks are visible in the investigation and reports.
 
-These checks validate the structure of model-reported support, not the truth of that support. The app
-does not perform reverse-image search, web grounding or independent visual matching. A retained candidate
+These checks validate the structure of model-reported support, not the truth of that support. Scene analysis
+does not run reverse-image searches or web grounding. The separate **Image search** workflow opens external
+providers for manual uploads and discovers Wikimedia references by text query; **Compare with AI** evaluates
+the supplied image pair, without independently verifying the reference's location. A retained candidate
 can still be wrong; an undetermined result is preferable to weak guesses. Earlier results are labelled
 as predating these checks rather than silently being treated as newly validated.
 

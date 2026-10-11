@@ -775,6 +775,11 @@ export default function App() {
                     </h2>
                     <div className="photo-panel-actions">
                       {current.photo && (
+                        <button className="text-button" onClick={() => setModal('image-research')}>
+                          <Search size={14} /> Image search
+                        </button>
+                      )}
+                      {current.photo && (
                         <button className="text-button" onClick={() => setModal('compare')}>
                           <Columns2 size={14} /> Compare
                         </button>
@@ -1583,11 +1588,17 @@ export default function App() {
           onClose={() => setModal(null)}
         />
       )}
-      {modal === 'compare' && current.photo && (
+      {(modal === 'compare' || modal === 'image-research') && current.photo && (
         <PhotoComparison
           investigation={current}
           onChange={(reference) => update({ reference })}
           onClose={() => setModal(null)}
+          startResearch={modal === 'image-research'}
+          placeName={selected?.name || current.analysisFeedback?.knownPlace}
+          health={health}
+          providerName={providerName}
+          onRefreshHealth={refreshHealth}
+          onUnlock={() => setModal('settings')}
         >
           {referencePhoto && (
             <p className="subtle">

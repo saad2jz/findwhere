@@ -3,8 +3,21 @@ import { ImagePlus, LoaderCircle } from 'lucide-react';
 import Modal from './Modal.jsx';
 import PhotoInspector from './PhotoInspector.jsx';
 import { referenceDetailsSchema, referenceSchema, safeUrl } from '../lib/domain.mjs';
+import { comparisonSchema, comparisonVerdicts } from '../lib/image-research.mjs';
+import ImageResearch from './ImageResearch.jsx';
 
-export default function PhotoComparison({ investigation, onChange, onClose, children }) {
+export default function PhotoComparison({
+  investigation,
+  onChange,
+  onClose,
+  children,
+  health,
+  providerName,
+  onRefreshHealth,
+  onUnlock,
+  startResearch,
+  placeName,
+}) {
   const reference = investigation.reference;
   const input = useRef(null);
   const request = useRef(0);
@@ -16,6 +29,9 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
   const [status, setStatus] = useState('');
   const [sourceUrl, setSourceUrl] = useState(reference?.sourceUrl || '');
   const [notes, setNotes] = useState(reference?.notes || '');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [researchBusy, setResearchBusy] = useState(false);
+  const [consent, setConsent] = useState(false);
   useEffect(
     () => () => {
       request.current++;
@@ -26,10 +42,54 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
     setSourceUrl(reference?.sourceUrl || '');
     setNotes(reference?.notes || '');
     setFieldErrors({});
-  }, [reference]);
+  }, [reference?.photo, reference?.sourceUrl, reference?.notes]);
+
+  async function compareWithAI() {
+    if (!reference || !consent || loading || aiBusy || researchBusy) return;
+    const token = ++request.current;
+    setAiBusy(true);
+    setError('');
+    setStatus('');
+    try {
+      let image = investigation.photo;
+      if (image === '/lisbon.jpg') {
+        const { readPhoto } = await import('../lib/photo.mjs');
+        const blob = await (await fetch(image)).blob();
+        image = (await readPhoto(new File([blob], 'sample.jpg', { type: blob.type }))).photo;
+      }
+      if (image === reference.photo)
+        throw new Error('Choose an independent reference, not the same image.');
+      if (image.length + reference.photo.length > 5_000_000)
+        throw new Error('The two previews exceed the combined AI limit. Import smaller images.');
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'comparison', image, referenceImage: reference.photo }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Image comparison failed.');
+      const result = comparisonSchema.parse(data);
+      if (token !== request.current) return;
+      onChange({
+        ...reference,
+        comparison: { ...result, comparedAt: new Date().toISOString(), provider: providerName },
+      });
+      setStatus(
+        'AI comparison saved. Review the findings; no candidate status or map point was changed.',
+      );
+    } catch (failure) {
+      if (token === request.current) setError(failure.message);
+    } finally {
+      if (token === request.current) {
+        setAiBusy(false);
+        setConsent(false);
+        onRefreshHealth();
+      }
+    }
+  }
 
   async function chooseReference(file) {
-    if (!file || loading) return;
+    if (!file || loading || aiBusy || researchBusy) return;
     const token = ++request.current;
     setLoading(true);
     setError('');
@@ -46,6 +106,7 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
       });
       setReferenceVersion((previous) => previous + 1);
       setRemovedReference(null);
+      setConsent(false);
       onChange(value);
       setStatus('Reference image added. Add its source and comparison notes below.');
     } catch (failure) {
@@ -76,11 +137,31 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
     setStatus('Reference details saved with this investigation.');
   }
   return (
-    <Modal title="Compare images" onClose={onClose} wide className="comparison-modal">
+    <Modal
+      title="Compare images"
+      onClose={() => !aiBusy && !loading && !researchBusy && onClose()}
+      wide
+      className="comparison-modal"
+    >
       <p className="comparison-intro">
         Compare stable landmarks, angles, and contradictions. Each image has independent view
         controls. Zoom, then drag; keyboard: + / −, arrows, R, 0.
       </p>
+      <details className="research-disclosure" open={startResearch || !reference}>
+        <summary>Find reference photos · reverse image search & Wikimedia</summary>
+        <ImageResearch
+          investigation={investigation}
+          placeName={placeName}
+          disabled={loading || aiBusy}
+          onBusy={setResearchBusy}
+          onReference={(value) => {
+            setReferenceVersion((previous) => previous + 1);
+            setRemovedReference(null);
+            setConsent(false);
+            onChange(referenceSchema.parse(value));
+          }}
+        />
+      </details>
       <div className="comparison-grid">
         <section aria-label="Investigation image">
           <h3>Investigation image</h3>
@@ -119,7 +200,7 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
                 className="button secondary"
                 type="button"
                 onClick={() => input.current.click()}
-                disabled={loading}
+                disabled={loading || aiBusy || researchBusy}
               >
                 Choose reference image
               </button>
@@ -131,14 +212,14 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
                 className="button secondary"
                 type="button"
                 onClick={() => input.current.click()}
-                disabled={loading}
+                disabled={loading || aiBusy || researchBusy}
               >
                 Replace reference image
               </button>
               <button
                 className="text-button"
                 type="button"
-                disabled={loading}
+                disabled={loading || aiBusy || researchBusy}
                 onClick={() => {
                   setRemovedReference(reference);
                   onChange(null);
@@ -171,6 +252,96 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
           )}
         </section>
       </div>
+      {reference?.attribution && (
+        <p className="reference-attribution">
+          Reference attribution: {reference.attribution}.{' '}
+          <a href={safeUrl(reference.sourceUrl)} target="_blank" rel="noopener noreferrer">
+            View source & license
+          </a>
+        </p>
+      )}
+      {reference && (
+        <section className="ai-comparison" aria-label="AI image comparison" aria-busy={aiBusy}>
+          <h3>Compare the two photos with {providerName}</h3>
+          <p>
+            The model compares visible features in image A and image B. It cannot verify the source
+            label or the exact camera position. No candidate is automatically confirmed.
+          </p>
+          {health?.aiEnabled && (!health.authRequired || health.authenticated) ? (
+            <>
+              <label className="research-consent">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  disabled={aiBusy || loading || researchBusy}
+                  onChange={(event) => setConsent(event.target.checked)}
+                />
+                Send both resized photos to {providerName} through this server. One comparison
+                consumes one daily AI allowance and may use more image tokens than a single-photo
+                analysis. Source URLs, notes and my reported place are not sent.
+              </label>
+              <button
+                className="button primary"
+                disabled={
+                  !consent || aiBusy || loading || researchBusy || health.dailyRemaining === 0
+                }
+                onClick={compareWithAI}
+              >
+                {aiBusy ? (
+                  <>
+                    <LoaderCircle className="spin" size={16} /> Comparing the two photos…
+                  </>
+                ) : (
+                  'Compare with AI'
+                )}
+              </button>
+              {health.dailyRemaining !== undefined && (
+                <p className="subtle">
+                  {health.dailyRemaining} daily AI requests remaining · shared with scene analysis.
+                </p>
+              )}
+            </>
+          ) : (
+            <button className="button secondary" onClick={onUnlock}>
+              Unlock AI comparison
+            </button>
+          )}
+          {reference.comparison && (
+            <div className="comparison-assessment">
+              <h4>{comparisonVerdicts[reference.comparison.verdict]}</h4>
+              <p>{reference.comparison.summary}</p>
+              <p className="subtle">
+                {reference.comparison.provider} ·{' '}
+                {new Date(reference.comparison.comparedAt).toLocaleString()}
+              </p>
+              <div className="comparison-findings">
+                {reference.comparison.findings.map((finding, index) => (
+                  <article key={index}>
+                    <strong>{finding.feature}</strong>
+                    <span className="tag">{finding.assessment}</span>
+                    <p>
+                      <b>Image A:</b> {finding.sourceObservation}
+                    </p>
+                    <p>
+                      <b>Image B:</b> {finding.referenceObservation}
+                    </p>
+                  </article>
+                ))}
+              </div>
+              {reference.comparison.limitations.length > 0 && (
+                <>
+                  <h4>Limits to check</h4>
+                  <ul>
+                    {reference.comparison.limitations.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+      )}
       {reference && (
         <form className="comparison-details" onSubmit={saveDetails} noValidate>
           <div>
@@ -181,6 +352,7 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
               id="comparison-source-url"
               type="url"
               value={sourceUrl}
+              disabled={aiBusy || researchBusy}
               maxLength={2000}
               placeholder="https://…"
               onChange={(event) => setSourceUrl(event.target.value)}
@@ -200,6 +372,7 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
             <textarea
               id="comparison-notes"
               value={notes}
+              disabled={aiBusy || researchBusy}
               maxLength={2000}
               placeholder="Which features match? What contradicts this location?"
               onChange={(event) => setNotes(event.target.value)}
@@ -213,7 +386,11 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
             )}
           </div>
           <div className="comparison-save">
-            <button className="button primary" type="submit" disabled={loading}>
+            <button
+              className="button primary"
+              type="submit"
+              disabled={loading || aiBusy || researchBusy}
+            >
               Save reference details
             </button>
           </div>
@@ -228,7 +405,7 @@ export default function PhotoComparison({ investigation, onChange, onClose, chil
         <button
           className="button secondary"
           type="button"
-          disabled={loading}
+          disabled={loading || aiBusy || researchBusy}
           onClick={() => {
             onChange(removedReference);
             setRemovedReference(null);

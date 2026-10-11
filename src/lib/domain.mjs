@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { comparisonSchema, comparisonVerdicts } from './image-research.mjs';
 import { compareCandidates, formatBearing, formatDistance } from './geo.mjs';
 
 export const pointSchema = z.object({
@@ -75,6 +76,10 @@ export const referenceDetailsSchema = z.object({
 export const referenceSchema = referenceDetailsSchema.extend({
   photo: photoSchema,
   fileName: z.string().min(1).max(300),
+  attribution: z.string().max(1200).optional(),
+  comparison: comparisonSchema
+    .extend({ comparedAt: z.iso.datetime(), provider: z.string().max(100) })
+    .optional(),
 });
 export const caseSchema = z.object({
   id: z.string().min(1).max(100),
@@ -225,6 +230,28 @@ export function exportReport(investigation, { originId } = {}) {
       '',
       'The embedded preview is included in the JSON backup; this report does not embed images.',
     );
+    if (data.reference.attribution)
+      lines.push('', `Reference attribution: ${md(data.reference.attribution)}`);
+    const comparison = data.reference.comparison;
+    if (comparison) {
+      lines.push(
+        '',
+        `### AI comparison: ${comparisonVerdicts[comparison.verdict]}`,
+        '',
+        `${md(comparison.provider)} · ${comparison.comparedAt}`,
+        '',
+        md(comparison.summary),
+        '',
+        'This comparison does not verify the reference label, camera position or candidate location.',
+      );
+      for (const finding of comparison.findings)
+        lines.push(
+          '',
+          `- ${md(finding.feature)} (${finding.assessment}): image A — ${md(finding.sourceObservation)}; image B — ${md(finding.referenceObservation)}`,
+        );
+      for (const limitation of comparison.limitations)
+        lines.push(`- Limitation: ${md(limitation)}`);
+    }
   }
   lines.push('', '## Location candidates', '');
   for (const candidate of data.candidates) {

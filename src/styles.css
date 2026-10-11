@@ -2022,6 +2022,135 @@ dialog::backdrop {
 .comparison-modal {
   width: min(1280px, calc(100% - 32px));
 }
+.research-disclosure {
+  padding: 16px;
+  margin: 0 0 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--soft);
+}
+.research-disclosure > summary {
+  cursor: pointer;
+  min-height: 32px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.image-research h3 {
+  margin: 24px 0 10px;
+}
+.research-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.reference-search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.reference-search-form > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.reference-search-form label {
+  display: block;
+  margin-bottom: 8px;
+}
+.reference-search-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 16px;
+}
+.reference-results {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+.reference-results article {
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.reference-results img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--soft);
+}
+.reference-results h4,
+.reference-results p {
+  overflow-wrap: anywhere;
+}
+.reference-results h4 {
+  margin: 12px 0 8px;
+  font-size: 14px;
+}
+.reference-results p {
+  font-size: 13px;
+}
+.reference-results .button {
+  width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  margin-top: 12px;
+  text-align: left;
+}
+.ai-comparison {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 24px 0;
+}
+.research-consent {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  line-height: 1.6;
+  margin: 16px 0;
+}
+.research-consent input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+}
+.comparison-findings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.comparison-findings article {
+  padding: 16px;
+  background: var(--soft);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.comparison-findings .tag {
+  margin-left: 8px;
+}
+.reference-attribution {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .reference-results,
+  .comparison-findings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .research-actions .button,
+  .reference-search-form .button {
+    width: 100%;
+    justify-content: center;
+  }
+  .research-disclosure,
+  .ai-comparison {
+    padding: 14px;
+  }
+}
 .comparison-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
