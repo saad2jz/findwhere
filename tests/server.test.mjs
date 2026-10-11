@@ -4,6 +4,8 @@ import { createApp } from '../server/app.mjs';
 
 async function withServer(options, run) {
   const server = createApp({
+    provider: 'openai',
+    geminiKey: '',
     apiKey: '',
     production: false,
     accessPassword: '',
@@ -168,6 +170,54 @@ test('health exposes configuration status without secrets', async () =>
     assert.doesNotMatch(body, /test-secret/);
     assert.equal(response.headers.get('cache-control'), 'no-store');
   }));
+
+test('Gemini uses the same authenticated API and validates provider results', async () => {
+  let calls = 0;
+  await withServer(
+    {
+      ...productionOptions,
+      analyze: undefined,
+      provider: 'gemini',
+      geminiKey: 'gemini-test-secret',
+      aiFetcher: async () => {
+        calls++;
+        return {
+          ok: true,
+          json: async () => ({
+            candidates: [
+              { finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(output) }] } },
+            ],
+          }),
+        };
+      },
+    },
+    async (base) => {
+      assert.equal((await post(base, input, { Origin: origin })).status, 401);
+      assert.equal(calls, 0);
+      const Cookie = (await login(base)).headers.get('set-cookie').split(';')[0];
+      const healthText = await (await fetch(base + '/api/health', { headers: { Cookie } })).text();
+      const health = JSON.parse(healthText);
+      assert.equal(health.provider, 'gemini');
+      assert.equal(health.model, 'gemini-3.5-flash-lite');
+      assert.doesNotMatch(healthText, /gemini-test-secret/);
+      const result = await (await post(base, input, { Origin: origin, Cookie })).json();
+      assert.equal(result.verified, false);
+      assert.equal(result.source, 'ai');
+      assert.equal(calls, 1);
+    },
+  );
+});
+test('missing Gemini credentials never fall back to a configured OpenAI key', async () =>
+  withServer(
+    { provider: 'gemini', geminiKey: '', apiKey: 'unused-openai-secret' },
+    async (base) => {
+      const health = await (await fetch(base + '/api/health')).json();
+      assert.equal(health.aiEnabled, false);
+      const response = await post(base, input);
+      assert.equal(response.status, 503);
+      assert.match((await response.json()).error, /GEMINI_API_KEY/);
+    },
+  ));
 test('AI without a key reports setup required, not fabricated results', async () =>
   withServer({}, async (base) => {
     const response = await post(base, input);

@@ -13,6 +13,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY src/lib ./src/lib
+RUN mkdir -p /app/.data && chown node:node /app/.data
 USER node
 EXPOSE 8787
 CMD ["node", "server/index.mjs"]

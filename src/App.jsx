@@ -135,6 +135,8 @@ export default function App() {
   const currentRef = useRef(current);
   currentRef.current = current;
   const selected = current.candidates.find((c) => c.id === selectedId) || current.candidates[0];
+  const providerName = health.provider === 'openai' ? 'OpenAI' : 'Gemini (Google)';
+  const providerKeyName = health.provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY';
   const onSelect = useCallback((id) => setSelectedId(id), []);
   const refreshHealth = useCallback(async () => {
     try {
@@ -1494,9 +1496,9 @@ export default function App() {
           <div className="info-box">
             <ShieldCheck size={18} />
             <p>
-              A resized photo and these clues will be sent to OpenAI through your server. The
-              original file and its EXIF metadata stay in your browser. Results are hypotheses to
-              verify.
+              A resized photo and these clues will be sent to {providerName} through your server.
+              The original file and its EXIF metadata stay in your browser. Results are hypotheses
+              to verify.
             </p>
           </div>
           <button
@@ -1552,14 +1554,16 @@ export default function App() {
           {!health.aiEnabled && (
             <>
               <p>
-                App owner: configure <code>OPENAI_API_KEY</code> and a 16–200 character{' '}
+                App owner: configure <code>{providerKeyName}</code> and a 16–200 character{' '}
                 <code>AI_ACCESS_PASSWORD</code> in your hosting dashboard, or use{' '}
                 <code>.env.example</code> locally. Redeploy after updating server settings.
               </p>
               <pre>
-                OPENAI_API_KEY=your-key-here
+                {providerKeyName}=your-key-here
                 <br />
-                OPENAI_MODEL=gpt-4.1-mini
+                {health.provider === 'openai'
+                  ? 'OPENAI_MODEL=gpt-4.1-mini'
+                  : 'GEMINI_MODEL=gemini-3.5-flash-lite'}
                 <br />
                 AI_ACCESS_PASSWORD=your-private-password
               </pre>

@@ -38,7 +38,7 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   Reference clues and image attribution remain attached.
 - **Research library:** 24 attributed resources, with keyword/category filters and contextual map links.
 - **Reports:** downloadable Markdown containing metadata, coordinates, evidence, sources, notes, and verification steps.
-- **Optional real AI scene analysis:** the server calls OpenAI's Responses API, returning visible clues and unverified
+- **Optional real AI scene analysis:** the server calls Gemini (Google) or OpenAI, returning visible clues and unverified
   location hypotheses with qualitative confidence. A configured server API key is required.
 - **Responsive interface:** desktop workspace and mobile layouts, keyboard controls, dialogs, and reduced-motion support.
 
@@ -73,8 +73,9 @@ production address; the dev proxy uses port 8787.
 Copy `.env.example` to `.env` (`Copy-Item .env.example .env` in PowerShell), then set:
 
 ```dotenv
-OPENAI_API_KEY=your-server-key
-OPENAI_MODEL=gpt-4.1-mini
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your-server-key
+GEMINI_MODEL=gemini-3.5-flash-lite
 AI_ACCESS_PASSWORD=choose-a-long-private-password
 AI_DAILY_LIMIT=10
 AI_USAGE_FILE=.data/ai-usage.json
@@ -84,6 +85,12 @@ Restart the server. Unlock AI access in **Your workspace**, upload a photo and c
 the user chooses **Send photo & analyze**. No browser API key field is used and keys are never included in
 the frontend bundle. Without a key, the rest of the app remains functional and the interface shows setup
 instructions rather than simulated analysis.
+
+Gemini is the default for new setups. Generate a Gemini API key in Google AI Studio and keep it server-side.
+`GEMINI_MODEL` may select another image-capable model supporting structured output. The default is the stable
+`gemini-3.5-flash-lite`; verify model access for your project when testing.
+For the existing OpenAI integration, set `AI_PROVIDER=openai`, `OPENAI_API_KEY`, and optionally
+`OPENAI_MODEL=gpt-4.1-mini`. The server never falls back to another provider if the selected one fails or lacks a key.
 
 AI is a source of leads. It does not verify Street View matches, guarantee locations, or generate calibrated
 probabilities. Generic scenes may return clues with no location candidates. Compare independent imagery and
@@ -99,7 +106,10 @@ New evidence starts unchecked; changing its observation or source clears the che
 Reviewed and edited AI observations also survive later analyses. A reference date describes the source material and
 does not claim the investigation photo was captured on that date.
 
-Implementation references: [image input](https://developers.openai.com/api/docs/guides/images-vision) and
+Implementation references: Gemini [image input](https://ai.google.dev/gemini-api/docs/generate-content/image-understanding),
+[structured output](https://ai.google.dev/gemini-api/docs/generate-content/structured-output), and
+[default model](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite);
+OpenAI [image input](https://developers.openai.com/api/docs/guides/images-vision) and
 [structured output](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
 
 ## Data and external services
@@ -113,9 +123,11 @@ up to 50 MB and 100 investigations per file. Imports validate the complete file 
 case identities, so repeated imports make separate copies. Markdown reports remain useful for sharing a readable
 summary, but cannot restore editable investigations. Archive preserves local data and is included in backups.
 
-Only the explicit AI action sends the resized JPEG and optional context to OpenAI via the server. The original
-file and its EXIF payload are not sent. The request uses `store: false`; this does not override the provider's
-other applicable data-handling policies. Photos are not automatically uploaded to reverse-image services.
+Only the explicit AI action sends the resized JPEG and optional context to the configured provider via the server.
+The confirmation identifies Gemini (Google) or OpenAI before sending. The original file and its EXIF payload
+are not sent. Gemini receives inline image bytes with no Files API upload; blocked, truncated, malformed and
+invalid results are rejected. OpenAI requests use `store: false`. Provider data-handling policies still apply
+to each API request. Photos are not automatically uploaded to reverse-image services.
 
 The map requests tiles from OpenStreetMap or Esri. Map views reveal the viewed area to the tile provider.
 Place searches send the typed query to Nominatim through the server, with an identifying User-Agent, a global
@@ -136,7 +148,7 @@ two concurrent analyses, a bounded image/context, and 2,000 output tokens. The m
 
 `AI_DAILY_LIMIT` defaults to 10 requests per UTC day across all sessions; 0 pauses AI. A reservation is
 made before each provider request, so failed provider attempts also consume the allowance. With
-`AI_USAGE_FILE`, reservations are written before contacting OpenAI and survive process restarts while the
+`AI_USAGE_FILE`, reservations are written before contacting the provider and survive process restarts while the
 file survives; corrupt or inaccessible state blocks analysis. Without a file, limits reset on restart.
 This is a single-instance allowance, not a durable financial cap: deleting hosting storage, deploying
 to an ephemeral filesystem, or running independent instances can reset/multiply it. Monitor spending
@@ -146,10 +158,10 @@ in the provider dashboard and keep the access password private. No automatic ret
 
 Create a **Web Service** from this repository's `main` branch, runtime **Node**, free instance,
 build command `npm ci --include=dev && npm run build`, start command `npm start`, and health path `/api/health`.
-Set `NODE_VERSION=24.15.0`, `NODE_ENV=production`, `HOST=0.0.0.0`, `OPENAI_MODEL=gpt-4.1-mini`,
-`AI_DAILY_LIMIT=10`, and `AI_USAGE_FILE=.data/ai-usage.json`. Render supplies `PORT` and
+Set `NODE_VERSION=24.15.0`, `NODE_ENV=production`, `HOST=0.0.0.0`,
+`AI_PROVIDER=gemini`, `GEMINI_MODEL=gemini-3.5-flash-lite`, `AI_DAILY_LIMIT=10`, and `AI_USAGE_FILE=.data/ai-usage.json`. Render supplies `PORT` and
 `RENDER_EXTERNAL_URL`; for a custom domain set `APP_ORIGIN` to its exact HTTPS origin (no trailing slash).
-Add `OPENAI_API_KEY` and `AI_ACCESS_PASSWORD` privately in Render's Environment settings, then redeploy.
+Add `GEMINI_API_KEY` and `AI_ACCESS_PASSWORD` privately in Render's Environment settings, then redeploy.
 Without either secret the public manual app still works and AI cannot spend credit.
 
 The [free instance](https://render.com/docs/free) sleeps after 15 minutes without traffic and has
@@ -185,7 +197,7 @@ docker run --rm -p 8787:8787 --env-file .env findwhere
 ```
 
 The container runs a production build and binds to `0.0.0.0`. It does not need a database volume because cases
-belong to the browser. Use `-e OPENAI_API_KEY=...` through your deployment's secret manager when applicable;
+belong to the browser. Supply `GEMINI_API_KEY` through your deployment's secret manager when applicable;
 do not bake secrets into the image.
 
 ## Project layout
