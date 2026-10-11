@@ -3,12 +3,14 @@ import {
   ArrowDownToLine,
   ArrowRight,
   ArrowUpRight,
+  Archive,
   BookOpen,
   Check,
   CheckCircle2,
   ChevronRight,
   CircleHelp,
   Compass,
+  Copy,
   Crosshair,
   Database,
   FileImage,
@@ -26,17 +28,20 @@ import {
   ShieldCheck,
   Sparkles,
   Upload,
+  Undo2,
   X,
 } from 'lucide-react';
 import {
   createCase,
+  copyCase,
   exportReport,
   mapLinks,
   parseCoordinates,
   resourceLink,
   safeUrl,
 } from './lib/domain.mjs';
-import { loadCases, saveCase } from './lib/storage.mjs';
+import { loadCases, saveCase, saveCases } from './lib/storage.mjs';
+import { exportBackup, importBackup, MAX_BACKUP_BYTES } from './lib/backup.mjs';
 import { demoCase, photoSource } from './data/demo.mjs';
 import catalog from './data/resources.json';
 
@@ -97,7 +102,10 @@ function Modal({ title, children, onClose, wide = false }) {
     <dialog
       ref={ref}
       className={wide ? 'wide-modal' : ''}
-      onCancel={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onClick={(event) => {
         if (event.target === ref.current) onClose();
       }}
@@ -129,10 +137,15 @@ export default function App() {
   const [category, setCategory] = useState('all');
   const [resourceSearch, setResourceSearch] = useState('');
   const [caseSearch, setCaseSearch] = useState('');
+  const [caseView, setCaseView] = useState('active');
+  const [dataBusy, setDataBusy] = useState(false);
+  const [dataError, setDataError] = useState('');
+  const [backupStatus, setBackupStatus] = useState('');
   const [context, setContext] = useState('');
   const [note, setNote] = useState('');
   const [dragging, setDragging] = useState(false);
   const input = useRef(null);
+  const backupInput = useRef(null);
   const revision = useRef(0);
   const currentRef = useRef(current);
   currentRef.current = current;
@@ -183,14 +196,126 @@ export default function App() {
   }, [message]);
 
   function update(change) {
-    setCurrent((previous) => ({ ...previous, ...change, updatedAt: new Date().toISOString() }));
+    const previous = currentRef.current;
+    const base = previous.demo ? copyCase(previous) : previous;
+    const value = { ...base, ...change, updatedAt: new Date().toISOString() };
+    currentRef.current = value;
+    setCurrent(value);
+    if (previous.demo)
+      setMessage('An editable copy of the sample is now saved in your investigations.');
   }
   function flushCurrent() {
     const value = currentRef.current;
     if (!ready || value.demo) return;
-    saveCase(value)
+    return saveCase(value)
       .then(() => setCases((previous) => [value, ...previous.filter((c) => c.id !== value.id)]))
       .catch((error) => setMessage(error.message));
+  }
+  function saveCopy() {
+    const value = copyCase(currentRef.current);
+    flushCurrent();
+    revision.current++;
+    currentRef.current = value;
+    setCurrent(value);
+    setMessage('Copy created. Reference clues remain labelled with their original sources.');
+  }
+  async function changeArchive(item) {
+    if (dataBusy) return;
+    setDataBusy(true);
+    setDataError('');
+    const live = currentRef.current;
+    const base = live.id === item.id ? live : item;
+    const value = {
+      ...base,
+      archivedAt: base.archivedAt ? null : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    if (live.id === item.id) {
+      currentRef.current = value;
+      setCurrent(value);
+    }
+    try {
+      await saveCase(value);
+      setCases((previous) => [value, ...previous.filter((c) => c.id !== value.id)]);
+      setMessage(
+        value.archivedAt
+          ? 'Investigation archived. Restore it from the Archived view anytime.'
+          : 'Investigation restored to Active.',
+      );
+    } catch (error) {
+      if (currentRef.current.id === item.id) {
+        currentRef.current = base;
+        setCurrent(base);
+      }
+      setDataError(error.message);
+    } finally {
+      setDataBusy(false);
+    }
+  }
+  function downloadFile(text, name, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = name;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+  async function backup(all = false) {
+    setDataBusy(true);
+    setDataError('');
+    setBackupStatus('');
+    try {
+      // Include in-memory edits even if autosave is pending or browser storage has failed.
+      const live = currentRef.current;
+      const stored = all ? await loadCases().catch(() => cases) : [];
+      const values = all
+        ? live.demo
+          ? stored
+          : [live, ...stored.filter((item) => item.id !== live.id)]
+        : [live];
+      downloadFile(
+        exportBackup(values),
+        `findwhere-${all ? 'workspace' : 'investigation'}-${new Date().toISOString().slice(0, 10)}.json`,
+        'application/json',
+      );
+      setMessage(
+        `Backup download started: ${values.length} investigation${values.length === 1 ? '' : 's'}, including photos and evidence.`,
+      );
+      setBackupStatus(
+        `Download started: ${values.length} investigation${values.length === 1 ? '' : 's'}.`,
+      );
+    } catch (error) {
+      setDataError(error.message);
+    } finally {
+      setDataBusy(false);
+    }
+  }
+  async function restoreBackup(file) {
+    if (!file || dataBusy) return;
+    setDataBusy(true);
+    setDataError('');
+    setBackupStatus('');
+    try {
+      if (file.size > MAX_BACKUP_BYTES)
+        throw new Error('Choose a Findwhere backup smaller than 50 MB.');
+      const values = importBackup(await file.text());
+      await saveCases(values);
+      setCases(await loadCases());
+      setPage('cases');
+      setCaseSearch('');
+      setCaseView(values.some((c) => !c.archivedAt) ? 'active' : 'archived');
+      setModal(null);
+      setMessage(
+        `Imported ${values.length} investigation${values.length === 1 ? '' : 's'} as separate copies. Existing work was preserved.`,
+      );
+    } catch (error) {
+      setDataError(error.message);
+    } finally {
+      setDataBusy(false);
+      if (backupInput.current) backupInput.current.value = '';
+    }
   }
   function startNew() {
     flushCurrent();
@@ -361,15 +486,11 @@ export default function App() {
   }
   async function downloadReport() {
     const text = exportReport(current);
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${current.title.replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'findwhere'}-report.md`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    downloadFile(
+      text,
+      `${current.title.replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'findwhere'}-report.md`,
+      'text/markdown;charset=utf-8',
+    );
     setMessage('Report download started.');
   }
   const filteredResources = catalog.resources.filter(
@@ -382,6 +503,12 @@ export default function App() {
   const sampleResources = catalog.resources.filter((r) =>
     ['google-maps', 'mapillary', 'earth-engine', 'google-lens'].includes(r.id),
   );
+  const activeCases = cases.filter((c) => !c.archivedAt);
+  const archivedCases = cases.filter((c) => c.archivedAt);
+  const visibleCases = (caseView === 'active' ? activeCases : archivedCases).filter((c) =>
+    `${c.title} ${c.notes} ${c.fileName}`.toLowerCase().includes(caseSearch.toLowerCase()),
+  );
+  const referencePhoto = current.photo === '/lisbon.jpg';
 
   return (
     <div className="app-shell">
@@ -409,7 +536,7 @@ export default function App() {
           </button>
           <button className={page === 'cases' ? 'active' : ''} onClick={() => setPage('cases')}>
             <FolderOpen size={19} /> Investigations{' '}
-            <span className="nav-count">{cases.length}</span>
+            <span className="nav-count">{activeCases.length}</span>
           </button>
           <button
             className={page === 'resources' ? 'active' : ''}
@@ -478,6 +605,18 @@ export default function App() {
           </div>
         </header>
         <main id="main">
+          {dataError && (
+            <div className="data-error" role="alert">
+              <span>{dataError}</span>
+              <button
+                className="icon-button"
+                aria-label="Dismiss backup or storage error"
+                onClick={() => setDataError('')}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          )}
           {page === 'workspace' && (
             <>
               <div className="page-heading">
@@ -495,6 +634,9 @@ export default function App() {
                   </p>
                 </div>
                 <div className="heading-actions">
+                  <button className="button secondary" onClick={() => setModal('backup')}>
+                    <Database size={16} /> Backup
+                  </button>
                   <button className="button secondary" onClick={downloadReport}>
                     <ArrowDownToLine size={16} /> Export report
                   </button>
@@ -503,6 +645,23 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              {(current.demo || current.archivedAt) && (
+                <div className="case-notice">
+                  <span>
+                    {current.demo
+                      ? 'Try the sample. Your first edit creates a saved copy.'
+                      : 'This investigation is archived. Its photos and notes are preserved.'}
+                  </span>
+                  <button
+                    className="text-button"
+                    onClick={current.demo ? saveCopy : () => changeArchive(current)}
+                    disabled={dataBusy}
+                  >
+                    {current.demo ? <Copy size={16} /> : <Undo2 size={16} />}
+                    {current.demo ? 'Save a copy' : 'Restore investigation'}
+                  </button>
+                </div>
+              )}
               <div className="case-strip">
                 <div>
                   <span className="case-number">
@@ -561,7 +720,7 @@ export default function App() {
                         </div>
                         <span className="photo-badge">
                           <span className="live-dot" />{' '}
-                          {current.demo ? 'Reference image' : 'Original metadata read locally'}
+                          {referencePhoto ? 'Reference image' : 'Original metadata read locally'}
                         </span>
                         <button
                           className="photo-expand"
@@ -605,7 +764,7 @@ export default function App() {
                         </small>
                       </span>
                     </div>
-                    {current.demo ? (
+                    {referencePhoto ? (
                       <External className="source-credit" href={photoSource}>
                         Bert K. · CC BY 2.0 <ArrowUpRight size={12} />
                       </External>
@@ -666,7 +825,9 @@ export default function App() {
                   className="button analysis-button"
                   onClick={() =>
                     setModal(
-                      health.aiEnabled && current.photo && !current.demo ? 'analyze' : 'settings',
+                      health.aiEnabled && current.photo?.startsWith('data:')
+                        ? 'analyze'
+                        : 'settings',
                     )
                   }
                   disabled={Boolean(busy)}
@@ -676,7 +837,7 @@ export default function App() {
                   ) : (
                     <Sparkles size={16} />
                   )}
-                  {health.aiEnabled && current.photo && !current.demo
+                  {health.aiEnabled && current.photo?.startsWith('data:')
                     ? 'Analyze scene'
                     : 'Set up AI analysis'}
                   <ArrowRight size={15} />
@@ -952,8 +1113,29 @@ export default function App() {
                   <h1>Every trail, in one place.</h1>
                   <p>Pick up where you left off. Your investigations are saved in this browser.</p>
                 </div>
-                <button className="button primary" onClick={startNew}>
-                  <Plus size={17} /> New investigation
+                <div className="heading-actions">
+                  <button className="button secondary" onClick={() => setModal('backup')}>
+                    <Database size={16} /> Backup & import
+                  </button>
+                  <button className="button primary" onClick={startNew} disabled={Boolean(busy)}>
+                    <Plus size={17} /> New investigation
+                  </button>
+                </div>
+              </div>
+              <div className="case-views" role="group" aria-label="Investigation view">
+                <button
+                  className={caseView === 'active' ? 'active' : ''}
+                  aria-pressed={caseView === 'active'}
+                  onClick={() => setCaseView('active')}
+                >
+                  Active <span>{activeCases.length}</span>
+                </button>
+                <button
+                  className={caseView === 'archived' ? 'active' : ''}
+                  aria-pressed={caseView === 'archived'}
+                  onClick={() => setCaseView('archived')}
+                >
+                  <Archive size={16} /> Archived <span>{archivedCases.length}</span>
                 </button>
               </div>
               <div className="filter-search">
@@ -969,10 +1151,13 @@ export default function App() {
                 />
               </div>
               <div className="saved-cases">
-                {cases
-                  .filter((c) => c.title.toLowerCase().includes(caseSearch.toLowerCase()))
-                  .map((item) => (
-                    <button className="saved-card" key={item.id} onClick={() => openCase(item)}>
+                {visibleCases.map((item) => (
+                  <article className="saved-card" key={item.id}>
+                    <button
+                      className="saved-open"
+                      onClick={() => openCase(item)}
+                      aria-label={`Open ${item.title}`}
+                    >
                       <div className="saved-image">
                         {item.photo ? <img src={item.photo} alt="" /> : <FileImage size={35} />}
                       </div>
@@ -986,24 +1171,54 @@ export default function App() {
                         </span>
                       </div>
                     </button>
-                  ))}
+                    <div className="saved-card-actions">
+                      <button
+                        className="text-button"
+                        onClick={() => changeArchive(item)}
+                        disabled={dataBusy}
+                        aria-label={`${item.archivedAt ? 'Restore' : 'Archive'} ${item.title}`}
+                      >
+                        {item.archivedAt ? <Undo2 size={16} /> : <Archive size={16} />}
+                        {item.archivedAt ? 'Restore' : 'Archive'}
+                      </button>
+                    </div>
+                  </article>
+                ))}
               </div>
-              {cases.length === 0 && (
+              {visibleCases.length === 0 && (
                 <div className="large-empty">
                   <FolderOpen size={35} />
-                  <h2>Your first discovery is waiting.</h2>
+                  <h2>
+                    {caseSearch
+                      ? 'No matching investigations.'
+                      : caseView === 'archived'
+                        ? 'No archived investigations.'
+                        : 'Your first discovery is waiting.'}
+                  </h2>
                   <p>
-                    Upload a photo to create an investigation. It will be saved here automatically.
+                    {caseSearch
+                      ? 'Try a different title, image filename, or word from your notes.'
+                      : caseView === 'archived'
+                        ? 'Archived work stays here until you restore it.'
+                        : 'Upload a photo to create an investigation. It will be saved here automatically.'}
                   </p>
-                  <button
-                    className="button primary"
-                    onClick={() => {
-                      startNew();
-                      input.current.click();
-                    }}
-                  >
-                    <ImagePlus size={18} /> Choose a photo
-                  </button>
+                  {caseSearch ? (
+                    <button className="button secondary" onClick={() => setCaseSearch('')}>
+                      Clear search
+                    </button>
+                  ) : (
+                    caseView === 'active' && (
+                      <button
+                        className="button primary"
+                        onClick={() => {
+                          startNew();
+                          input.current.click();
+                        }}
+                      >
+                        <ImagePlus size={18} /> Choose a photo
+                      </button>
+                    )
+                  )}
                 </div>
               )}
               <button className="demo-link" onClick={() => openCase(demoCase())}>
@@ -1092,6 +1307,14 @@ export default function App() {
       <input
         className="sr-only"
         type="file"
+        ref={backupInput}
+        accept="application/json,.json"
+        onChange={(e) => restoreBackup(e.target.files[0])}
+        aria-label="Import Findwhere backup"
+      />
+      <input
+        className="sr-only"
+        type="file"
         ref={input}
         accept="image/jpeg,image/png,image/webp"
         onChange={(e) => uploadPhoto(e.target.files[0])}
@@ -1119,7 +1342,7 @@ export default function App() {
             src={current.photo}
             alt={`Source image: ${current.fileName}`}
           />
-          {current.demo && (
+          {referencePhoto && (
             <p className="subtle">
               Photo by Bert K. / Bert Kaufmann,{' '}
               <External href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</External>,
@@ -1182,10 +1405,13 @@ export default function App() {
               <strong>Local by default</strong>
               <p>
                 Photos, notes, and investigations are stored in this browser using IndexedDB. Export
-                reports to keep a separate copy.
+                a full backup to keep photos, evidence and notes on another device.
               </p>
             </div>
           </div>
+          <button className="button secondary full-width" onClick={() => setModal('backup')}>
+            <Database size={16} /> Manage backups & import
+          </button>
           <h3>
             AI scene analysis{' '}
             <Tag tone={health.aiEnabled ? 'green' : 'gold'}>
@@ -1224,6 +1450,56 @@ export default function App() {
           >
             View project & setup instructions <ArrowUpRight size={16} />
           </External>
+        </Modal>
+      )}
+      {modal === 'backup' && (
+        <Modal title="Keep your discoveries" onClose={() => !dataBusy && setModal(null)}>
+          <p>
+            Download a complete JSON backup with resized photos, metadata, candidates, evidence,
+            notes, and archive status. Store it somewhere you trust.
+          </p>
+          <div className="backup-actions" aria-busy={dataBusy}>
+            <button
+              className="button primary full-width"
+              disabled={dataBusy}
+              onClick={() => backup(false)}
+            >
+              <ArrowDownToLine size={17} /> Back up current investigation
+            </button>
+            <button
+              className="button secondary full-width"
+              disabled={dataBusy || !cases.length}
+              onClick={() => backup(true)}
+            >
+              <Database size={17} /> Back up all investigations ({cases.length})
+            </button>
+          </div>
+          <h3>Bring your work with you</h3>
+          <p>
+            Import a Findwhere JSON backup, up to 50 MB and 100 investigations. Every import creates
+            separate copies and preserves your existing work.
+          </p>
+          <button
+            className="button secondary full-width"
+            disabled={dataBusy}
+            onClick={() => backupInput.current.click()}
+          >
+            <Upload size={17} /> {dataBusy ? 'Working…' : 'Choose backup to import'}
+          </button>
+          {dataError && (
+            <p className="data-error" role="alert">
+              {dataError}
+            </p>
+          )}
+          {backupStatus && (
+            <p className="backup-status" role="status">
+              <CheckCircle2 size={17} /> {backupStatus}
+            </p>
+          )}
+          <p className="subtle">
+            Archived investigations are included in workspace backups. Markdown reports are for
+            reading; use JSON backups to restore editable cases.
+          </p>
         </Modal>
       )}
       {modal === 'guide' && (

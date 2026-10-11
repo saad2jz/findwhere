@@ -16,6 +16,12 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
 - **Location candidates:** search named places or enter WGS84 coordinates; mark hypotheses supported or ruled out.
 - **Evidence ledger:** record observations, check evidence, inspect metadata, and write investigation notes.
 - **Saved investigations:** photos, candidates, and notes persist in IndexedDB on the current browser/device.
+- **Portable backups:** download one investigation or the entire workspace as JSON, including photos and evidence;
+  import on another browser without overwriting existing work.
+- **Recoverable archive:** move investigations out of the active list and restore them anytime. Search titles,
+  photo filenames, and notes across either view.
+- **Editable sample:** save a copy of the Lisbon sample, or edit it to automatically create your own saved copy.
+  Reference clues and image attribution remain attached.
 - **Research library:** 24 attributed resources, with keyword/category filters and contextual map links.
 - **Reports:** downloadable Markdown containing metadata, coordinates, evidence, sources, notes, and verification steps.
 - **Optional real AI scene analysis:** the server calls OpenAI's Responses API, returning visible clues and unverified
@@ -73,7 +79,12 @@ Implementation references: [image input](https://developers.openai.com/api/docs/
 
 Original images are decoded locally. A resized JPEG preview (maximum dimension 1600 px), selected metadata,
 notes, and candidates are saved in browser IndexedDB. The app does not save originals on the server. Export a
-report for a separate copy; browser storage is device-specific and may be cleared by browser settings.
+JSON backup for a restorable copy; browser storage is device-specific and may be cleared by browser settings.
+Choose **Backup & import** on the Investigations page or **Backup** in the workspace. Backups contain resized
+photos, metadata, candidates, evidence, notes, and archive status. Import supports version 1 Findwhere JSON,
+up to 50 MB and 100 investigations per file. Imports validate the complete file before saving and assign fresh
+case identities, so repeated imports make separate copies. Markdown reports remain useful for sharing a readable
+summary, but cannot restore editable investigations. Archive preserves local data and is included in backups.
 
 Only the explicit AI action sends the resized JPEG and optional context to OpenAI via the server. The original
 file and its EXIF payload are not sent. The request uses `store: false`; this does not override the provider's
@@ -103,7 +114,8 @@ npm run check
 ```
 
 Tests cover coordinate bounds/precision, contextual links, safe URLs, report exports, catalog attribution,
-API configuration, request/output validation, error handling, origin checks, rate limiting, and cached/throttled
+backup round trips, import validation and identity isolation, archive compatibility, sample copying, API
+configuration, request/output validation, error handling, origin checks, rate limiting, and cached/throttled
 geocoding. AI and geocoder API tests use mocks and make no paid API calls. Live AI verification requires a
 configured key and model access.
 
@@ -126,6 +138,7 @@ src/components/MapPanel.jsx Leaflet map and candidate markers
 src/lib/domain.mjs          Validated cases, coordinates, reports, and analysis contracts
 src/lib/photo.mjs           Local image resizing and EXIF extraction
 src/lib/storage.mjs         IndexedDB persistence
+src/lib/backup.mjs          Versioned JSON backups and validated imports
 src/data/resources.json     Curated and attributed OSINT resources
 server/app.mjs              Health, geocoding, and optional AI endpoints
 tests/                      Offline domain and API regression tests

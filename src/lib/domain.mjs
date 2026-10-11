@@ -5,7 +5,7 @@ export const pointSchema = z.object({
   lng: z.number().finite().min(-180).max(180),
 });
 export const candidateSchema = pointSchema.extend({
-  id: z.string(),
+  id: z.string().min(1).max(100),
   name: z.string().min(1).max(300),
   country: z.string().max(100),
   confidence: z.enum(['low', 'medium', 'high']),
@@ -14,7 +14,7 @@ export const candidateSchema = pointSchema.extend({
   reason: z.string().max(2000),
 });
 export const clueSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1).max(100),
   category: z.string().max(80),
   text: z.string().min(1).max(2000),
   source: z.string().max(200),
@@ -22,17 +22,39 @@ export const clueSchema = z.object({
   url: z.string().max(2000).optional(),
 });
 export const caseSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1).max(100),
   title: z.string().min(1).max(200),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
   demo: z.boolean(),
-  photo: z.string().max(6_000_000).nullable(),
+  photo: z
+    .string()
+    .max(6_000_000)
+    .refine(
+      (value) =>
+        value === '/lisbon.jpg' ||
+        /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value),
+      'Photos must be embedded JPEG, PNG or WebP images.',
+    )
+    .nullable(),
   fileName: z.string().max(300),
   metadata: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
-  candidates: z.array(candidateSchema).max(50),
-  clues: z.array(clueSchema).max(100),
+  candidates: z
+    .array(candidateSchema)
+    .max(50)
+    .refine(
+      (items) => new Set(items.map((item) => item.id)).size === items.length,
+      'Candidate identities must be unique.',
+    ),
+  clues: z
+    .array(clueSchema)
+    .max(100)
+    .refine(
+      (items) => new Set(items.map((item) => item.id)).size === items.length,
+      'Evidence identities must be unique.',
+    ),
   notes: z.string().max(20000),
+  archivedAt: z.iso.datetime().nullable().default(null),
 });
 
 export function createCase(title = 'Untitled investigation') {
@@ -49,6 +71,21 @@ export function createCase(title = 'Untitled investigation') {
     candidates: [],
     clues: [],
     notes: '',
+    archivedAt: null,
+  };
+}
+
+export function copyCase(investigation) {
+  const value = caseSchema.parse(investigation);
+  const now = new Date().toISOString();
+  return {
+    ...structuredClone(value),
+    id: crypto.randomUUID(),
+    title: `${value.title.slice(0, 193)} — copy`,
+    createdAt: now,
+    updatedAt: now,
+    demo: false,
+    archivedAt: null,
   };
 }
 

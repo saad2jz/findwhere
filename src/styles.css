@@ -1549,13 +1549,16 @@ h1 {
   color: #a4b98b;
   display: grid;
   place-items: center;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
 }
 .saved-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  min-height: 0;
 }
-.saved-card > div:last-child {
+.saved-open > div:last-child {
   padding: 18px;
 }
 .saved-card h2 {
@@ -1567,12 +1570,98 @@ h1 {
   color: #8d9b7e;
   margin-top: 9px;
 }
-.saved-card > div > span {
+.saved-open > div > span {
   display: flex;
   justify-content: space-between;
   font-size: 9px;
   margin-top: 19px;
   color: #a0ac92;
+}
+.saved-open {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+.saved-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 16px 12px;
+  border-top: 1px solid #edf1e4;
+}
+.saved-card-actions button {
+  min-height: 44px;
+}
+.case-views,
+.case-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.case-views button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dee7d2;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-height: 44px;
+  color: #536544;
+  font-size: 13px;
+}
+.case-views button.active {
+  background: #edf2e3;
+  border-color: #91a87c;
+}
+.case-views span {
+  font-variant-numeric: tabular-nums;
+}
+.case-notice {
+  justify-content: space-between;
+  background: #f0f4e8;
+  border: 1px solid #d9e3cc;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #536544;
+}
+.case-notice button {
+  min-height: 44px;
+}
+.backup-actions {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.backup-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #466335;
+  font-size: 13px;
+  margin-top: 16px;
+}
+.data-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e1b4a6;
+  background: #fff3ef;
+  color: #813e2e;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 .large-empty {
   display: flex;

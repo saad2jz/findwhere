@@ -30,13 +30,26 @@ export async function loadCases() {
     db.close();
   }
 }
-export async function saveCase(data) {
-  const value = caseSchema.parse(data);
+let writes = Promise.resolve();
+
+export function saveCase(data) {
+  return saveCases([data]);
+}
+
+export async function saveCases(data) {
+  const values = data.map((value) => caseSchema.parse(value));
+  // Keep writes in call order; an older autosave must not undo a newer archive/import.
+  const operation = writes.then(() => writeCases(values));
+  writes = operation.catch(() => {});
+  return operation;
+}
+
+async function writeCases(values) {
   const db = await open();
   try {
     await new Promise((resolve, reject) => {
       const tx = db.transaction('cases', 'readwrite');
-      tx.objectStore('cases').put(value);
+      for (const value of values) tx.objectStore('cases').put(value);
       tx.oncomplete = resolve;
       tx.onerror = () =>
         reject(new Error('Could not save this investigation. Export a report to keep your work.'));
