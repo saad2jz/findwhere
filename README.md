@@ -14,6 +14,11 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
 - **Photo inspection:** expand a stored preview, zoom up to 8× its fitted size, drag or use arrow keys to pan,
   rotate in 90° steps, and reset the view. Use + / −, R, and 0 while the image area is focused.
   These view controls do not alter the saved photo or reconstruct detail lost during resizing.
+- **Reference comparison:** choose **Compare** beside the source image to add a local reference photo or screenshot.
+  Inspect the two previews with separate controls, record a source URL and comparison notes, and save the details.
+  The reference is saved with the investigation and included in JSON backups; its source and notes appear in reports.
+  Replacing the reference clears its old source and notes. A removed reference can be restored with **Undo**
+  while the dialog stays open. No candidate is automatically marked verified.
 - **Investigation map:** interactive candidate markers, street/satellite layers, zoom, recentering, and external
   Google Maps/Street View links.
 - **Location candidates:** search named places or enter WGS84 coordinates; refine names, points, confidence,

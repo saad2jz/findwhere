@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { RotateCw, Scan, ZoomIn, ZoomOut } from 'lucide-react';
 import { clampPan, MAX_ZOOM, MIN_ZOOM, viewerFrame } from '../lib/viewer.mjs';
 
-export default function PhotoInspector({ src, fileName }) {
+export default function PhotoInspector({ src, fileName, label = 'Photo', compact = false }) {
+  const helpId = useId();
   const surface = useRef(null);
   const drag = useRef(null);
   const [image, setImage] = useState({ width: 0, height: 0 });
@@ -91,7 +92,7 @@ export default function PhotoInspector({ src, fileName }) {
 
   return (
     <div className="photo-inspector">
-      <div className="inspector-toolbar" role="group" aria-label="Image view controls">
+      <div className="inspector-toolbar" role="group" aria-label={`${label} view controls`}>
         <div className="inspector-zoom-controls">
           <button
             type="button"
@@ -123,8 +124,8 @@ export default function PhotoInspector({ src, fileName }) {
         ref={surface}
         tabIndex={0}
         role="region"
-        aria-label="Photo inspection area"
-        aria-describedby="inspector-help"
+        aria-label={`${label} inspection area`}
+        aria-describedby={helpId}
         onKeyDown={onKeyDown}
         onPointerDown={(event) => {
           if (!ready || !event.isPrimary || event.button !== 0) return;
@@ -144,7 +145,7 @@ export default function PhotoInspector({ src, fileName }) {
       >
         <img
           src={src}
-          alt={`Source image: ${fileName}`}
+          alt={`${label}: ${fileName}`}
           draggable={false}
           onLoad={(event) =>
             setImage({
@@ -173,7 +174,7 @@ export default function PhotoInspector({ src, fileName }) {
           ? `${image.width} × ${image.height} preview · ${Math.round(view.zoom * 100)}% of fitted size · ${view.rotation}° rotation`
           : 'Source image preview'}
       </p>
-      <p className="subtle" id="inspector-help">
+      <p className={compact ? 'sr-only' : 'subtle'} id={helpId}>
         Zoom in, then drag to inspect. With the image area focused, use + / − to zoom, arrow keys to
         pan, R to rotate, and 0 to reset. These controls do not change the saved photo or add
         detail.

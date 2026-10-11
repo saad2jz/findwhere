@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
-export default function Modal({ title, children, onClose, wide = false }) {
+export default function Modal({ title, children, onClose, wide = false, className = '' }) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current.showModal();
@@ -9,7 +9,7 @@ export default function Modal({ title, children, onClose, wide = false }) {
   return (
     <dialog
       ref={ref}
-      className={wide ? 'wide-modal' : ''}
+      className={`${wide ? 'wide-modal' : ''} ${className}`.trim()}
       onCancel={(event) => {
         event.preventDefault();
         onClose();

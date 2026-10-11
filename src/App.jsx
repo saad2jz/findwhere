@@ -11,6 +11,7 @@ import {
   CircleHelp,
   Compass,
   Copy,
+  Columns2,
   Crosshair,
   Database,
   FileImage,
@@ -48,6 +49,7 @@ import { demoCase, photoSource } from './data/demo.mjs';
 import catalog from './data/resources.json';
 import Modal from './components/Modal.jsx';
 import PhotoInspector from './components/PhotoInspector.jsx';
+import PhotoComparison from './components/PhotoComparison.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
@@ -685,13 +687,20 @@ export default function App() {
                     <h2>
                       <FileImage size={17} /> Source image
                     </h2>
-                    <button
-                      className="text-button"
-                      onClick={() => input.current.click()}
-                      disabled={Boolean(busy)}
-                    >
-                      <Upload size={14} /> {current.photo ? 'Replace photo' : 'Upload photo'}
-                    </button>
+                    <div className="photo-panel-actions">
+                      {current.photo && (
+                        <button className="text-button" onClick={() => setModal('compare')}>
+                          <Columns2 size={14} /> Compare
+                        </button>
+                      )}
+                      <button
+                        className="text-button"
+                        onClick={() => input.current.click()}
+                        disabled={Boolean(busy)}
+                      >
+                        <Upload size={14} /> {current.photo ? 'Replace photo' : 'Upload photo'}
+                      </button>
+                    </div>
                   </div>
                   <div
                     className={`photo-stage ${current.photo ? 'has-photo' : 'empty-photo'} ${dragging ? 'dragging' : ''}`}
@@ -1419,6 +1428,21 @@ export default function App() {
             </p>
           )}
         </Modal>
+      )}
+      {modal === 'compare' && current.photo && (
+        <PhotoComparison
+          investigation={current}
+          onChange={(reference) => update({ reference })}
+          onClose={() => setModal(null)}
+        >
+          {referencePhoto && (
+            <p className="subtle">
+              Investigation image by Bert K. / Bert Kaufmann,{' '}
+              <External href="https://creativecommons.org/licenses/by/2.0/">CC BY 2.0</External>,
+              via <External href={photoSource}>Wikimedia Commons</External>. Resized preview.
+            </p>
+          )}
+        </PhotoComparison>
       )}
       {modal === 'analyze' && (
         <Modal title="Read the scene" onClose={() => !busy && setModal(null)}>

@@ -27,22 +27,37 @@ export const clueSchema = z.object({
   observedOn: z.iso.date().optional(),
   editedAt: z.iso.datetime().optional(),
 });
+const photoSchema = z
+  .string()
+  .max(6_000_000)
+  .refine(
+    (value) =>
+      value === '/lisbon.jpg' ||
+      /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value),
+    'Photos must be embedded JPEG, PNG or WebP images.',
+  );
+export const referenceDetailsSchema = z.object({
+  sourceUrl: z
+    .string()
+    .max(2000)
+    .refine(
+      (value) => !value || Boolean(safeUrl(value)),
+      'Use a full http:// or https:// URL without a username or password.',
+    ),
+  notes: z.string().max(2000),
+});
+export const referenceSchema = referenceDetailsSchema.extend({
+  photo: photoSchema,
+  fileName: z.string().min(1).max(300),
+});
 export const caseSchema = z.object({
   id: z.string().min(1).max(100),
   title: z.string().min(1).max(200),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   demo: z.boolean(),
-  photo: z
-    .string()
-    .max(6_000_000)
-    .refine(
-      (value) =>
-        value === '/lisbon.jpg' ||
-        /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value),
-      'Photos must be embedded JPEG, PNG or WebP images.',
-    )
-    .nullable(),
+  photo: photoSchema.nullable(),
+  reference: referenceSchema.nullable().default(null),
   fileName: z.string().max(300),
   metadata: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
   candidates: z
@@ -72,6 +87,7 @@ export function createCase(title = 'Untitled investigation') {
     updatedAt: now,
     demo: false,
     photo: null,
+    reference: null,
     fileName: '',
     metadata: {},
     candidates: [],
@@ -162,6 +178,26 @@ export function exportReport(investigation) {
   ];
   for (const [key, value] of Object.entries(data.metadata))
     lines.push(`- ${md(key)}: ${md(value ?? 'Not available')}`);
+  if (data.reference) {
+    lines.push(
+      '',
+      '## Reference image comparison',
+      '',
+      `Reference image: ${md(data.reference.fileName)}`,
+      'Comparison material only; a visual resemblance does not verify a location.',
+      '',
+    );
+    if (data.reference.sourceUrl)
+      lines.push(
+        `Source: <${safeUrl(data.reference.sourceUrl).replaceAll('<', '%3C').replaceAll('>', '%3E')}>`,
+        '',
+      );
+    lines.push(
+      md(data.reference.notes || 'No comparison notes recorded.'),
+      '',
+      'The embedded preview is included in the JSON backup; this report does not embed images.',
+    );
+  }
   lines.push('', '## Location candidates', '');
   for (const candidate of data.candidates) {
     lines.push(
