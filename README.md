@@ -10,6 +10,28 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
 
 ## What works
 
+- **Findwhere search pipeline (Gemini):** choose **Findwhere search** in the analysis dialog.
+  The server reads visible clues, plans at most three document/image queries and three individually named
+  public-place lookups, retrieves records, selects up to three sourced hypotheses, resolves their OSM
+  identities, and compares up to two available Wikimedia photos with the investigation photo. It orders
+  mapped hypotheses by paired visual support; contradictions stay visible but off the map. No model-generated
+  coordinate is used. Live progress follows actual server stages. Each run retains queries, citations,
+  attribution, uncertainties, comparison findings and the number of attempted AI requests in the case,
+  JSON backup and Markdown report. User notes and saved candidate coordinates are never supplied as input;
+  optional context and selected investigator corrections are explicitly labelled.
+  Without another key, retrieval covers Wikipedia, OpenStreetMap and Wikimedia Commons. Set the optional
+  server-only `BRAVE_SEARCH_API_KEY` for broader public web coverage (up to three queries per run; provider
+  charges may apply). Missing sources, ambiguous branches and unavailable images remain unresolved rather
+  than becoming invented coordinates. A run uses 1–4 AI requests, normally 2–4 when evidence is retrieved;
+  every attempt, including a failed attempt, consumes the shared daily allowance. Search/provider failures
+  after scene reading retain available partial evidence. References use allowlisted Commons hosts, bounded
+  downloads and no redirects; arbitrary source URLs are citations, never crawl targets.
+  This is automated text/POI retrieval and reference comparison, **not a reverse-image index**, and does
+  not promise GeoSeeer-level recall, exact camera coordinates, or calibrated accuracy. Ordinary businesses
+  and less documented scenes need broader source coverage and can still yield no specific hypothesis.
+  [Brave API](https://api-dashboard.search.brave.com/documentation/quickstart),
+  [MediaWiki search](https://www.mediawiki.org/wiki/API:Search),
+  [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/).
 - **Photo intake:** JPEG, PNG, and WebP upload or drag and drop; local EXIF extraction; automatic GPS candidates.
 - **Photo inspection:** expand a stored preview, zoom up to 8× its fitted size, drag or use arrow keys to pan,
   rotate in 90° steps, and reset the view. Use + / −, R, and 0 while the image area is focused.

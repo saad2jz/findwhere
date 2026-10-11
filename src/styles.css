@@ -3570,3 +3570,126 @@ dialog::backdrop {
 #known-place {
   width: 100%;
 }
+.analysis-mode {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-block: 20px;
+}
+.analysis-mode legend {
+  font-weight: 600;
+  padding-inline: 6px;
+}
+.analysis-mode label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.analysis-mode input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-top: 3px;
+  accent-color: #3e6753;
+}
+.pipeline-progress {
+  padding: 16px;
+  margin-block: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.pipeline-progress ol {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+.pipeline-progress li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: #626b65;
+}
+.pipeline-progress li > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  flex: 0 0 24px;
+}
+.pipeline-progress .active,
+.pipeline-progress .complete {
+  color: #28543d;
+  font-weight: 600;
+}
+.pipeline-progress p {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.pipeline-results {
+  border-top: 1px solid var(--line);
+  margin-block: 20px;
+  padding-block: 8px 20px;
+}
+.pipeline-check {
+  padding: 18px;
+  margin-block: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.pipeline-check h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.pipeline-check .tag {
+  white-space: normal;
+}
+.pipeline-results a {
+  color: #28543d;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pipeline-results summary {
+  min-height: 44px;
+}
+.pipeline-reference {
+  margin-block: 16px;
+  padding: 14px;
+  background: var(--paper);
+  border-radius: 10px;
+}
+.pipeline-reference img {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  max-height: 250px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.pipeline-finding {
+  border-left: 3px solid #b5c6b7;
+  padding-left: 12px;
+  margin-block: 16px;
+}
+.pipeline-finding p {
+  margin-block: 6px;
+}
+.pipeline-warning {
+  padding: 12px;
+  background: #fbf5e8;
+  border-left: 3px solid #95722a;
+  border-radius: 4px;
+  color: #614b20;
+}

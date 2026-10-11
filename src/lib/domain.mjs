@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { comparisonSchema, comparisonVerdicts } from './image-research.mjs';
 import { compareCandidates, formatBearing, formatDistance } from './geo.mjs';
 import { researchLeadSchema, modelLeadSchema, modelLeadsJsonSchema } from './research-leads.mjs';
+import { pipelineSchema } from './search-pipeline.mjs';
 
 export const pointSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
@@ -29,6 +30,7 @@ const analysisReviewSchema = z.object({
   nextSteps: z.array(z.string().max(500)).max(8),
   withheldCandidates: z.number().int().min(0).max(5),
   researchLeads: z.array(researchLeadSchema).max(3).default([]),
+  pipeline: pipelineSchema.optional(),
 });
 const candidateDetailsSchema = pointSchema.extend({
   name: z.string().min(1).max(300),
@@ -40,6 +42,7 @@ const candidateDetailsSchema = pointSchema.extend({
   visualEvidence: visualEvidenceSchema.optional(),
   mapReference: mapReferenceSchema.optional(),
   modelPoint: pointSchema.optional(),
+  searchCheckId: z.string().max(80).optional(),
 });
 export const candidateSchema = candidateDetailsSchema.extend({
   id: z.string().min(1).max(100),
@@ -339,6 +342,58 @@ export function exportReport(investigation, { originId } = {}) {
     for (const uncertainty of data.analysisReview.uncertainties)
       lines.push(`- Limitation: ${md(uncertainty)}`);
     for (const step of data.analysisReview.nextSteps) lines.push(`- Next check: ${md(step)}`);
+    const pipeline = data.analysisReview.pipeline;
+    if (pipeline) {
+      lines.push(
+        '',
+        '### Findwhere search evidence trail',
+        '',
+        `Run: ${pipeline.startedAt} — ${pipeline.completedAt}`,
+        `Engines: ${pipeline.engines.map(md).join('; ')}`,
+        `AI requests attempted: ${pipeline.requestsUsed}`,
+        `User context supplied: ${pipeline.contextUsed}; investigator correction supplied: ${pipeline.correctionUsed}`,
+        'Ranking reflects evidence checks, not measured accuracy. Text searches are not reverse-image matches.',
+        '',
+      );
+      for (const warning of pipeline.warnings) lines.push(`- Search limitation: ${md(warning)}`);
+      for (const query of pipeline.queries)
+        lines.push(`- ${md(query.service)} query: ${md(query.query)}`);
+      for (const check of pipeline.checks) {
+        lines.push(
+          '',
+          `#### ${md(check.name)} (${md(check.country)})`,
+          '',
+          `Map check: ${check.status}; reference check: ${check.referenceStatus}`,
+          md(check.reason),
+          md(check.uncertainty),
+        );
+        for (const feature of check.features) lines.push(`- Observed clue: ${md(feature)}`);
+        for (const id of [...new Set([...check.sourceIds, check.referenceId].filter(Boolean))]) {
+          const source = pipeline.sources.find((item) => item.id === id);
+          if (source)
+            lines.push(
+              `- Source: ${md(source.title)} — <${safeUrl(source.url).replaceAll('<', '%3C').replaceAll('>', '%3E')}>${source.attribution ? `; ${md(source.attribution)}` : ''}`,
+            );
+        }
+        if (check.comparison) {
+          lines.push(
+            `Reference comparison: ${comparisonVerdicts[check.comparison.verdict]}`,
+            md(check.comparison.summary),
+          );
+          for (const finding of check.comparison.findings)
+            lines.push(
+              `- ${md(finding.feature)} (${finding.assessment}): investigation — ${md(finding.sourceObservation)}; reference — ${md(finding.referenceObservation)}`,
+            );
+          for (const limit of check.comparison.limitations)
+            lines.push(`- Comparison limitation: ${md(limit)}`);
+        }
+      }
+      lines.push('', 'Retrieved sources:', '');
+      for (const source of pipeline.sources)
+        lines.push(
+          `- ${md(source.title)} (${source.kind}): <${safeUrl(source.url).replaceAll('<', '%3C').replaceAll('>', '%3E')}>`,
+        );
+    }
     for (const lead of data.analysisReview.researchLeads) {
       lines.push(
         '',
@@ -403,6 +458,7 @@ export const analysisSchema = z.object({
         visualEvidence: visualEvidenceSchema.optional(),
         mapReference: mapReferenceSchema.optional(),
         modelPoint: pointSchema.optional(),
+        searchCheckId: z.string().max(80).optional(),
       }),
     )
     .max(5),
@@ -411,6 +467,7 @@ export const analysisSchema = z.object({
   withheldCandidates: z.number().int().min(0).max(5).default(0),
   researchLeads: z.array(researchLeadSchema).max(3).default([]),
   leads: z.array(modelLeadSchema).max(3).default([]),
+  pipeline: pipelineSchema.optional(),
 });
 
 export const analysisJsonSchema = {

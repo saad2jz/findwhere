@@ -6,7 +6,7 @@ export function createGeocoder({ fetcher = fetch, now = Date.now, url: endpoint,
   let lastStart = -Infinity;
   const cache = new Map();
   const pending = new Map();
-  async function search(query, { waitForSlot = false } = {}) {
+  async function search(query, { waitForSlot = false, signal } = {}) {
     const key = query.trim().toLocaleLowerCase();
     const cached = cache.get(key);
     if (cached && now() - cached.time < 24 * 60 * 60 * 1000) return cached.results;
@@ -16,7 +16,7 @@ export function createGeocoder({ fetcher = fetch, now = Date.now, url: endpoint,
       while (now() - lastStart < 1100) {
         const delay = 1100 - (now() - lastStart);
         if (!waitForSlot || Date.now() + delay > deadline) throw new GeocoderBusy('Geocoder busy');
-        await pause(delay);
+        await pause(delay, undefined, { signal });
       }
       lastStart = now();
       const url = new URL(endpoint);
@@ -28,7 +28,7 @@ export function createGeocoder({ fetcher = fetch, now = Date.now, url: endpoint,
       }).toString();
       const response = await fetcher(url, {
         headers: { 'User-Agent': userAgent, Accept: 'application/json', 'Accept-Language': 'en' },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]),
         redirect: 'error',
       });
       if (!response.ok) throw new Error('Geocoder unavailable');
@@ -42,6 +42,19 @@ export function createGeocoder({ fetcher = fetch, now = Date.now, url: endpoint,
           category: String(item.class || item.category || '').slice(0, 80),
           lat: Number(item.lat),
           lng: Number(item.lon),
+          ...(item.address?.road ? { street: String(item.address.road).slice(0, 200) } : {}),
+          ...(item.address?.city || item.address?.town || item.address?.village
+            ? {
+                city: String(item.address.city || item.address.town || item.address.village).slice(
+                  0,
+                  200,
+                ),
+              }
+            : {}),
+          ...(['node', 'way', 'relation'].includes(item.osm_type) &&
+          /^\d+$/.test(String(item.osm_id))
+            ? { osmUrl: `https://www.openstreetmap.org/${item.osm_type}/${item.osm_id}` }
+            : {}),
         }))
         .filter(
           (item) =>

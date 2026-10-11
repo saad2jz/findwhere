@@ -59,6 +59,8 @@ import AiAccess from './components/AiAccess.jsx';
 import { AnalysisReview, AnalysisCorrection } from './components/AnalysisReview.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 import { resolvePlaceReference } from './lib/place-match.mjs';
+import { readPipelineResponse } from './lib/search-pipeline.mjs';
+import { PipelineProgress } from './components/PipelineResults.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
 
@@ -135,6 +137,9 @@ export default function App() {
   const [backupStatus, setBackupStatus] = useState('');
   const [context, setContext] = useState('');
   const [includeCorrection, setIncludeCorrection] = useState(true);
+  const [analysisMode, setAnalysisMode] = useState('pipeline');
+  const [searchProgress, setSearchProgress] = useState(null);
+  const analysisController = useRef(null);
   const [note, setNote] = useState('');
   const [dragging, setDragging] = useState(false);
   const input = useRef(null);
@@ -396,22 +401,27 @@ export default function App() {
     if (!current.photo || current.demo || busy) return;
     if (health.authRequired && !health.authenticated) return;
     setBusy('analysis');
+    setSearchProgress(null);
+    const searching = analysisMode === 'pipeline' && health.provider === 'gemini';
+    analysisController.current = new AbortController();
     const requestRevision = revision.current;
     try {
       const response = await fetch('/api/analyze', {
+        signal: analysisController.current.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: current.photo,
           context,
+          mode: searching ? 'pipeline' : 'scene',
+          stream: searching,
           ...(includeCorrection && current.analysisFeedback
             ? { feedback: current.analysisFeedback }
             : {}),
         }),
       });
-      const result = await response.json();
       if (response.status === 401) setHealth((previous) => ({ ...previous, authenticated: false }));
-      if (!response.ok) throw new Error(result.error || 'Analysis failed. Please try again.');
+      const result = await readPipelineResponse(response, setSearchProgress);
       if (requestRevision !== revision.current) return;
       const candidates = result.candidates.map((c) => ({
         ...c,
@@ -425,15 +435,22 @@ export default function App() {
       if (candidates.length) setSelectedId(candidates[0].id);
       setMessage(
         candidates.length
-          ? 'Scene analysis added. Verify these hypotheses against independent imagery.'
+          ? searching
+            ? 'Search finished. Review the sources and reference-photo findings for each hypothesis.'
+            : 'Scene analysis added. Verify these hypotheses against independent imagery.'
           : result.researchLeads?.length
             ? `${result.researchLeads.length} research lead${result.researchLeads.length === 1 ? '' : 's'} added. No precise location identified; check the reference photos.`
             : 'Clues added. No usable location lead was found; try a wider photo or add geographic context.',
       );
       setModal(null);
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.name === 'AbortError'
+          ? 'Search cancelled. Attempted AI requests still count; your previous saved assessment was kept.'
+          : error.message,
+      );
     } finally {
+      analysisController.current = null;
       refreshHealth();
       setBusy('');
     }
@@ -930,7 +947,9 @@ export default function App() {
                   <strong>A second pair of eyes.</strong>
                   <p>
                     {health.aiEnabled
-                      ? 'Get location hypotheses or research leads based on visible details, then check reference photos.'
+                      ? health.searchPipelineEnabled
+                        ? 'Search visible clues, retrieve sources and compare available reference photos.'
+                        : 'Get location hypotheses or research leads based on visible details, then check reference photos.'
                       : 'Extract GPS locally, or connect AI to read the scene and suggest location hypotheses.'}
                   </p>
                 </div>
@@ -951,7 +970,9 @@ export default function App() {
                     <Sparkles size={16} />
                   )}
                   {health.aiEnabled && current.photo?.startsWith('data:')
-                    ? 'Analyze scene'
+                    ? health.searchPipelineEnabled
+                      ? 'Search this photo'
+                      : 'Analyze scene'
                     : 'Set up AI analysis'}
                   <ArrowRight size={15} />
                 </button>
@@ -1627,23 +1648,57 @@ export default function App() {
         </PhotoComparison>
       )}
       {modal === 'analyze' && (
-        <Modal title="Read the scene" onClose={() => !busy && setModal(null)}>
+        <Modal title="Investigate this photo" onClose={() => !busy && setModal(null)}>
           <div className="modal-feature-icon">
             <Sparkles size={26} />
           </div>
           <p>
-            Compare architecture, layout and readable signs. Only locations with distinctive visual
-            support will appear on the map. Uncertain places, regions and feature searches appear
-            separately as research leads. An undetermined result is possible. This scene analysis
-            does not perform a web search or match reference images automatically.
+            {analysisMode === 'pipeline' && health.provider === 'gemini'
+              ? 'Search from visible clues, check public map records and compare available reference photos. Results remain hypotheses; a precise location may still be undetermined.'
+              : 'Read visible clues and propose unverified location hypotheses or research leads. Scene clues alone do not search sources or compare reference photos automatically.'}
           </p>
           <AiAccess health={health} onRefresh={refreshHealth} />
+          {health.provider === 'gemini' && (
+            <fieldset className="analysis-mode" disabled={Boolean(busy)}>
+              <legend>Investigation method</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="analysis-mode"
+                  value="pipeline"
+                  checked={analysisMode === 'pipeline'}
+                  onChange={() => setAnalysisMode('pipeline')}
+                />
+                <span>
+                  <strong>Findwhere search</strong>
+                  <br />
+                  Retrieve sources and compare up to two reference photos. Uses 2–4 AI requests when
+                  sources are found.
+                </span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="analysis-mode"
+                  value="scene"
+                  checked={analysisMode === 'scene'}
+                  onChange={() => setAnalysisMode('scene')}
+                />
+                <span>
+                  <strong>Scene clues only</strong>
+                  <br />
+                  One AI request; no automatic source retrieval or reference comparison.
+                </span>
+              </label>
+            </fieldset>
+          )}
           <label className="notes-label" htmlFor="analysis-context">
             Any clues you already have? <span>(optional)</span>
           </label>
           <textarea
             id="analysis-context"
             maxLength={2000}
+            disabled={Boolean(busy)}
             value={context}
             onChange={(e) => setContext(e.target.value)}
             placeholder="For example: this may be in northern Portugal…"
@@ -1654,6 +1709,7 @@ export default function App() {
                 <input
                   type="checkbox"
                   checked={includeCorrection}
+                  disabled={Boolean(busy)}
                   onChange={(event) => setIncludeCorrection(event.target.checked)}
                 />{' '}
                 Include my correction in this analysis
@@ -1671,12 +1727,26 @@ export default function App() {
             <p>
               A resized photo, these clues and any selected correction will be sent to{' '}
               {providerName} through your server. The original file and its EXIF metadata stay in
-              your browser. Results are hypotheses to verify. Detailed analysis may take longer and
-              use more tokens than before; one request consumes one daily allowance. Proposed public
-              landmark names are sent to the configured geocoder (Nominatim by default) to resolve
-              map points. Your photo is not sent to the geocoder.
+              your browser. Results are hypotheses to verify. Each attempted AI request consumes one
+              shared daily allowance, including failures. Proposed public-place names go to the
+              configured geocoder (Nominatim by default); your photo does not.
+              {analysisMode === 'pipeline' && health.provider === 'gemini' && (
+                <>
+                  {' '}
+                  Visible-feature queries also go to Wikimedia Commons and{' '}
+                  {health.broadSearchEnabled ? 'Brave Search' : 'Wikipedia'}. Up to two retrieved
+                  Commons photos go to Gemini with your investigation image for comparison.
+                  {health.broadSearchEnabled
+                    ? ' Up to three Brave searches can incur provider charges.'
+                    : ' Broad web search is not configured; coverage of less documented places is limited.'}{' '}
+                  Saved candidates and notes are not included as input.
+                </>
+              )}
             </p>
           </div>
+          {busy === 'analysis' && analysisMode === 'pipeline' && health.provider === 'gemini' && (
+            <PipelineProgress progress={searchProgress} />
+          )}
           <button
             className="button primary full-width"
             onClick={analyzePhoto}
@@ -1689,14 +1759,30 @@ export default function App() {
           >
             {busy === 'analysis' ? (
               <>
-                <LoaderCircle size={17} className="spin" /> Reading the scene…
+                <LoaderCircle size={17} className="spin" />{' '}
+                {analysisMode === 'pipeline' && health.provider === 'gemini'
+                  ? 'Searching…'
+                  : 'Reading the scene…'}
               </>
             ) : (
               <>
-                <Sparkles size={17} /> Send photo & analyze
+                <Sparkles size={17} />{' '}
+                {analysisMode === 'pipeline' && health.provider === 'gemini'
+                  ? 'Send photo & search'
+                  : 'Send photo & analyze'}
               </>
             )}
           </button>
+          {busy === 'analysis' && (
+            <button
+              type="button"
+              className="button secondary full-width"
+              style={{ marginTop: 12 }}
+              onClick={() => analysisController.current?.abort()}
+            >
+              Cancel analysis
+            </button>
+          )}
         </Modal>
       )}
       {modal === 'correct-analysis' && (

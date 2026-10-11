@@ -14,6 +14,8 @@ import {
   assessComparison,
 } from '../src/lib/image-research.mjs';
 import { createReferenceSearch } from './references.mjs';
+import { createDocumentSearch } from './search-retrieval.mjs';
+import { runSearchPipeline } from './search-pipeline.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const imageInput = z
@@ -23,7 +25,8 @@ const imageInput = z
 const requestSchema = z
   .object({
     image: imageInput,
-    mode: z.enum(['scene', 'comparison']).default('scene'),
+    mode: z.enum(['scene', 'comparison', 'pipeline']).default('scene'),
+    stream: z.boolean().default(false),
     referenceImage: imageInput.optional(),
     context: z.string().max(2000).default(''),
     feedback: analysisFeedbackSchema.optional(),
@@ -58,6 +61,7 @@ export function createApp({
   appOrigin = process.env.APP_ORIGIN || process.env.RENDER_EXTERNAL_URL || '',
   dailyLimit = Number(process.env.AI_DAILY_LIMIT ?? 10),
   usageFile = process.env.AI_USAGE_FILE || '',
+  braveKey = process.env.BRAVE_SEARCH_API_KEY || '',
 } = {}) {
   const app = express();
   const access = createAccess({
@@ -90,6 +94,7 @@ export function createApp({
       process.env.GEOCODER_USER_AGENT || 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)',
   });
   const searchReferences = createReferenceSearch({ fetcher, now });
+  const searchDocuments = createDocumentSearch({ fetcher, braveKey });
   const attempts = new Map();
   let runningAnalysis = 0;
   let globalAttempts = { start: now(), count: 0 };
@@ -154,6 +159,8 @@ export function createApp({
       authRequired: access.required,
       authConfigured: access.configured,
       authenticated,
+      searchPipelineEnabled: aiConfigured && provider === 'gemini',
+      broadSearchEnabled: Boolean(braveKey),
       ...usage,
     });
   });
@@ -207,6 +214,11 @@ export function createApp({
           'Provide JPEG, PNG, or WebP images under 3.5 MB combined and no more than 2,000 characters of context. Comparison requires two different photos.',
       });
     const comparing = input.data.mode === 'comparison';
+    const searching = input.data.mode === 'pipeline';
+    if (searching && provider !== 'gemini')
+      return res
+        .status(400)
+        .json({ error: 'Findwhere search currently requires the Gemini provider.' });
     const clientKey = req.ip || 'local';
     const bucket = attempts.get(clientKey);
     if (now() - globalAttempts.start >= 60_000) globalAttempts = { start: now(), count: 0 };
@@ -234,6 +246,58 @@ export function createApp({
     runningAnalysis++;
     globalAttempts.count++;
     try {
+      if (searching) {
+        // The same auth, origin, concurrency and daily allowance protect every pipeline stage.
+        if (!(await quota.status()).dailyRemaining)
+          return res
+            .status(429)
+            .json({
+              error:
+                'The server’s daily analysis limit has been reached. Try again after 00:00 UTC.',
+            });
+        const disconnect = new AbortController();
+        const signal = AbortSignal.any([disconnect.signal, AbortSignal.timeout(240000)]);
+        res.on('close', () => {
+          if (!res.writableEnded) disconnect.abort();
+        });
+        const send = (event) => {
+          if (!res.destroyed && !res.writableEnded) res.write(JSON.stringify(event) + '\n');
+        };
+        if (input.data.stream) {
+          res
+            .status(200)
+            .set({
+              'Content-Type': 'application/x-ndjson; charset=utf-8',
+              'X-Accel-Buffering': 'no',
+            });
+          res.flushHeaders();
+        }
+        const boundedAI = (url, options) =>
+          aiFetcher(url, { ...options, signal: AbortSignal.any([signal, options.signal]) });
+        const result = await runSearchPipeline({
+          input: input.data,
+          reserve: () => quota.reserve(),
+          callAI:
+            analyze ||
+            ((request) =>
+              analyzeGemini({ apiKey: geminiKey, model, input: request, fetcher: boundedAI })),
+          searchPlaces: geocoder.search,
+          searchDocuments,
+          searchReferences,
+          fetcher,
+          broadSearch: Boolean(braveKey),
+          signal,
+          onProgress: input.data.stream
+            ? (progress) => send({ type: 'progress', ...progress })
+            : undefined,
+        });
+        const response = { ...result, source: 'ai', verified: false };
+        if (input.data.stream) {
+          send({ type: 'result', result: response });
+          return res.end();
+        }
+        return res.json(response);
+      }
       if (!(await quota.reserve()))
         return res.status(429).json({
           error: 'The server’s daily analysis limit has been reached. Try again after 00:00 UTC.',
@@ -304,6 +368,17 @@ export function createApp({
         verified: false,
       });
     } catch {
+      if (res.headersSent) {
+        if (!res.destroyed && !res.writableEnded)
+          res.end(
+            JSON.stringify({
+              type: 'error',
+              error:
+                'Search could not finish. It may have timed out, reached the daily allowance or lost provider access. No result was saved.',
+            }) + '\n',
+          );
+        return;
+      }
       return res.status(502).json({
         error:
           'AI analysis failed. Check the server API key, model access, and connection, then try again.',

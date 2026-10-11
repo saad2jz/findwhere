@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import Modal from './Modal.jsx';
 import { featureSearchLeads } from '../lib/research-leads.mjs';
+import PipelineResults from './PipelineResults.jsx';
 
 export function AnalysisReview({ investigation, onCorrect, onResearch }) {
   const review = investigation.analysisReview;
@@ -32,6 +33,7 @@ export function AnalysisReview({ investigation, onCorrect, onResearch }) {
       {review && (
         <>
           <p>{review.summary}</p>
+          <PipelineResults pipeline={review.pipeline} />
           {leads.length > 0 && (
             <section className="research-leads" aria-label="Research leads">
               <h3>Research leads · not identified locations</h3>

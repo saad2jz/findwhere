@@ -99,6 +99,7 @@ export function mergeAnalysis(previous, response, incomingCandidates) {
       nextSteps: result.nextSteps,
       withheldCandidates: result.withheldCandidates,
       researchLeads: result.researchLeads,
+      ...(result.pipeline ? { pipeline: result.pipeline } : {}),
     },
     candidates: [
       ...previous.candidates.filter(
