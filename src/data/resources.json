@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "source": "https://start.me/p/L1rEYQ/osint4all",
+  "reviewed_on": "2026-10-11",
+  "notes": "Curated discovery links from OSINT4ALL MAPS, GEO, and SEARCH ENGINES, with original descriptions. Lens and TinEye supplement the directory from the existing GeoINT search workflow. Review date records discovery, not service availability. Landing pages require manual input unless a link builder is supplied; availability, coverage, accounts, and terms vary by provider.",
+  "resources": [
+    {
+      "id": "google-maps",
+      "name": "Google Maps",
+      "category": "maps",
+      "url": "https://www.google.com/maps",
+      "builder": "google",
+      "description": "Compare roads, businesses, place photos, and satellite context.",
+      "tags": ["roads", "places", "satellite"],
+      "action": "Check the candidate's road layout and permanent building features.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "bing-maps",
+      "name": "Bing Maps",
+      "category": "maps",
+      "url": "https://www.bing.com/maps",
+      "builder": "bing",
+      "description": "Compare a candidate against an alternative map and imagery provider.",
+      "tags": ["roads", "satellite", "comparison"],
+      "action": "Compare coverage and imagery dates with the first provider.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "openstreetmap",
+      "name": "OpenStreetMap",
+      "category": "maps",
+      "url": "https://www.openstreetmap.org/",
+      "builder": "osm",
+      "description": "Inspect mapped roads, paths, buildings, and named features.",
+      "tags": ["roads", "buildings", "open-data"],
+      "action": "Check names and geometry; missing mapped features do not prove absence.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "yandex-maps",
+      "name": "Yandex Maps",
+      "category": "maps",
+      "url": "https://yandex.com/maps/",
+      "description": "An alternative map source for local names and place imagery.",
+      "tags": ["roads", "places", "regional"],
+      "action": "Search the candidate in the local language and inspect available imagery.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "baidu-maps",
+      "name": "Baidu Maps",
+      "category": "maps",
+      "url": "https://map.baidu.com/",
+      "description": "Research Chinese place names, businesses, and map context.",
+      "tags": ["china", "places", "regional"],
+      "action": "Account for Baidu coordinate systems before comparing with WGS84 points.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "waze",
+      "name": "Waze Live Map",
+      "category": "maps",
+      "url": "https://www.waze.com/live-map",
+      "description": "Inspect road networks and traffic context.",
+      "tags": ["roads", "traffic"],
+      "action": "Use road geometry as a lead; live traffic does not establish a photo's capture date.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "mapillary",
+      "name": "Mapillary",
+      "category": "streetlevel",
+      "url": "https://www.mapillary.com/app/",
+      "description": "Look for community street-level imagery around a candidate.",
+      "tags": ["panorama", "roads", "comparison"],
+      "action": "Check capture dates and compare at least three invariant scene features.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "kartaview",
+      "name": "KartaView",
+      "category": "streetlevel",
+      "url": "https://kartaview.org/map/",
+      "description": "Check another source of community street-level photographs.",
+      "tags": ["panorama", "roads", "comparison"],
+      "action": "Inspect nearby sequences when other street imagery lacks coverage.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "satellites-pro",
+      "name": "Satellites.pro",
+      "category": "satellite",
+      "url": "https://satellites.pro/",
+      "description": "Explore satellite map views to compare terrain and settlement layout.",
+      "tags": ["satellite", "terrain", "comparison"],
+      "action": "Compare coastlines, field patterns, and building footprints; record the imagery provider.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "earth-engine",
+      "name": "Google Earth Engine Data Catalog",
+      "category": "satellite",
+      "url": "https://developers.google.com/earth-engine/datasets/",
+      "description": "Discover remote-sensing datasets for dated landscape comparisons.",
+      "tags": ["satellite", "datasets", "historical"],
+      "action": "Choose a dataset with the necessary time range and spatial resolution; access may require an account.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "firms",
+      "name": "NASA FIRMS",
+      "category": "satellite",
+      "url": "https://firms.modaps.eosdis.nasa.gov/map/",
+      "description": "Inspect mapped fire detections as environmental context.",
+      "tags": ["fire", "satellite", "time"],
+      "action": "Check detection dates and resolution; a fire detection alone cannot identify a camera position.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "living-atlas",
+      "name": "ArcGIS Living Atlas",
+      "category": "geodata",
+      "url": "https://livingatlas.arcgis.com/en/browse/",
+      "description": "Find thematic geospatial layers and reference maps.",
+      "tags": ["datasets", "environment", "infrastructure"],
+      "action": "Record layer provenance, update date, coverage, and attribution before using it.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "geonames",
+      "name": "GeoNames",
+      "category": "geodata",
+      "url": "https://www.geonames.org/",
+      "description": "Research alternate place names and administrative context.",
+      "tags": ["names", "places", "open-data"],
+      "action": "Keep all plausible same-name places and check their administrative regions.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "geoseer",
+      "name": "GeoSeer",
+      "category": "geodata",
+      "url": "https://www.geoseer.net/",
+      "description": "Discover indexed geospatial datasets and services.",
+      "tags": ["datasets", "open-data", "discovery"],
+      "action": "Search for the candidate region and a specific clue such as roads or buildings.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "geoplatform",
+      "name": "GeoPlatform",
+      "category": "geodata",
+      "url": "https://www.geoplatform.gov/",
+      "description": "Discover US geospatial information and reference datasets.",
+      "tags": ["datasets", "usa", "open-data"],
+      "action": "Select a layer relevant to the clue and verify its publisher and coverage.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "fao-catalog",
+      "name": "FAO Map Catalog",
+      "category": "geodata",
+      "url": "https://data.apps.fao.org/map/catalog/srv/eng/catalog.search#/home",
+      "description": "Discover agricultural and environmental map datasets.",
+      "tags": ["datasets", "agriculture", "environment"],
+      "action": "Compare land-use clues at the dataset's actual resolution and date.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "isric",
+      "name": "ISRIC Data Hub",
+      "category": "geodata",
+      "url": "https://data.isric.org/geonetwork/srv/eng/catalog.search#/home",
+      "description": "Discover soil datasets for broad environmental context.",
+      "tags": ["datasets", "soil", "environment"],
+      "action": "Use soil information as regional context alongside independent scene evidence.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "windy-webcams",
+      "name": "Windy Webcams",
+      "category": "weather",
+      "url": "https://www.windy.com/-Webcams/webcams",
+      "description": "Find public webcam views for environmental and skyline comparisons.",
+      "tags": ["webcams", "weather", "skyline"],
+      "action": "Check the webcam location and timestamp before comparing weather or skyline details.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "panorama-generator",
+      "name": "Udeuschle Panorama Generator",
+      "category": "terrain",
+      "url": "https://www.udeuschle.de/panoramas/makepanoramas_en.htm",
+      "description": "Generate a terrain skyline from a hypothesized viewpoint.",
+      "tags": ["skyline", "mountains", "terrain"],
+      "action": "Enter the candidate point, then compare peak order and bearings with the photo.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "google-advanced",
+      "name": "Google Advanced Search",
+      "category": "search",
+      "url": "https://www.google.com/advanced_search",
+      "description": "Prepare searches using distinctive text, language, or site restrictions.",
+      "tags": ["text", "language", "discovery"],
+      "action": "Search exact visible text and local-language variants; save the original source page.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "brave-search",
+      "name": "Brave Search",
+      "category": "search",
+      "url": "https://search.brave.com/",
+      "description": "Try another web index for place names and visual clues.",
+      "tags": ["text", "discovery", "comparison"],
+      "action": "Search landmark or business text and compare primary sources across results.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "duckduckgo",
+      "name": "DuckDuckGo",
+      "category": "search",
+      "url": "https://duckduckgo.com/",
+      "description": "Search another index for captions, businesses, and landmarks.",
+      "tags": ["text", "discovery", "comparison"],
+      "action": "Combine visible words with a candidate place and follow the source attribution.",
+      "source": "https://start.me/p/L1rEYQ/osint4all"
+    },
+    {
+      "id": "google-lens",
+      "name": "Google Lens",
+      "category": "imagery",
+      "url": "https://lens.google.com/",
+      "builder": "lens",
+      "description": "Prepare a reverse-image search for an image URL, following the upstream search workflow.",
+      "tags": ["reverse-image", "provenance", "comparison"],
+      "action": "Separate exact matches from visual lookalikes and AI-generated location suggestions.",
+      "source": "https://github.com/marouane53/GeoINT/blob/main/references/search.md"
+    },
+    {
+      "id": "tineye",
+      "name": "TinEye",
+      "category": "imagery",
+      "url": "https://tineye.com/",
+      "builder": "tineye",
+      "description": "Look for indexed copies and provenance of an image URL.",
+      "tags": ["reverse-image", "provenance", "historical"],
+      "action": "Inspect source pages and distinguish first indexed date from the actual capture date.",
+      "source": "https://github.com/marouane53/GeoINT/blob/main/references/search.md"
+    }
+  ]
+}
