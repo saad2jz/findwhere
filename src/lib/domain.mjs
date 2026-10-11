@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { compareCandidates, formatBearing, formatDistance } from './geo.mjs';
 
 export const pointSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
@@ -159,7 +160,7 @@ function md(value) {
     .replaceAll('\r', '')
     .replaceAll('\n', ' ');
 }
-export function exportReport(investigation) {
+export function exportReport(investigation, { originId } = {}) {
   const data = caseSchema.parse(investigation);
   const lines = [
     `# ${md(data.title)}`,
@@ -222,6 +223,28 @@ export function exportReport(investigation) {
         '',
       );
     }
+  }
+  const origin =
+    data.candidates.find((candidate) => candidate.id === originId) || data.candidates[0];
+  const comparisons = compareCandidates(origin, data.candidates);
+  if (comparisons.length) {
+    lines.push(
+      '## Candidate location comparison',
+      '',
+      `Origin: ${md(origin.name)}; coordinates: ${origin.lat}, ${origin.lng}`,
+      '',
+      'Approximate straight-line surface distances on a sphere (radius 6,371 km), ignoring terrain and routes. Initial bearings are clockwise from true north; they do not indicate the camera viewing direction. Distance order does not imply likelihood.',
+      '',
+    );
+    for (const { candidate, distanceMetres, initialBearingDegrees } of comparisons)
+      lines.push(
+        `- ${md(candidate.name)} (${candidate.status}): ${formatDistance(distanceMetres)}; initial bearing: ${formatBearing(initialBearingDegrees)}`,
+      );
+    lines.push(
+      '',
+      'A bearing is not defined for identical or opposite points, or from a pole.',
+      '',
+    );
   }
   lines.push('## Evidence ledger', '');
   for (const clue of data.clues) {

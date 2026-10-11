@@ -23,6 +23,10 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   Google Maps/Street View links.
 - **Location candidates:** search named places or enter WGS84 coordinates; refine names, points, confidence,
   and reasoning; mark hypotheses supported or ruled out. Refinements retain the original lead and source.
+- **Candidate spacing:** choose **Distances** above the candidate list to compare separation and initial bearing
+  from any candidate, sorted nearest first with statuses retained. Reports use the selected candidate as origin.
+  Calculations use a sphere with a 6,371 km radius, ignore routes and terrain, and do not rank likelihood or
+  indicate the camera viewing direction. [Calculation method](https://www.movable-type.co.uk/scripts/latlong.html).
 - **Evidence ledger:** record and edit observations with categories, source URLs, and reference dates; check
   evidence, inspect metadata, and write investigation notes. Editing evidence clears its checked status.
 - **Saved investigations:** photos, candidates, and notes persist in IndexedDB on the current browser/device.

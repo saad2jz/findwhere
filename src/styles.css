@@ -1908,6 +1908,107 @@ dialog::backdrop {
 .photo-inspector {
   margin-bottom: 18px;
 }
+.candidate-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.candidates-panel .panel-header {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.comparison-origin-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 8px;
+}
+.comparison-origin-select {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.modal-body .comparison-origin-point {
+  margin: 8px 0 20px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.distance-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+.distance-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.distance-table caption {
+  text-align: left;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.distance-table th,
+.distance-table td {
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.distance-table thead th {
+  background: var(--soft);
+  font-weight: 550;
+  font-size: 12px;
+}
+.distance-table th:first-child {
+  width: 48%;
+}
+.distance-table tbody th {
+  font-weight: 400;
+}
+.distance-table tbody th strong {
+  display: block;
+  font-weight: 550;
+}
+.distance-table tbody th span,
+.distance-table tbody th small {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.distance-table td {
+  font-variant-numeric: tabular-nums;
+}
+.modal-body .distance-method {
+  color: #52634b;
+  font-size: 12px;
+}
+.distance-empty {
+  padding: 18px;
+  border: 1px dashed #c8d4bf;
+  border-radius: 6px;
+}
+@media (max-width: 520px) {
+  .comparison-origin-select {
+    font-size: 16px;
+  }
+  .distance-table th,
+  .distance-table td {
+    padding: 12px 6px;
+    font-size: 12px;
+  }
+  .distance-table th:first-child {
+    width: 44%;
+  }
+}
 .photo-panel-actions {
   display: flex;
   flex-wrap: wrap;

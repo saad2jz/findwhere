@@ -50,6 +50,7 @@ import catalog from './data/resources.json';
 import Modal from './components/Modal.jsx';
 import PhotoInspector from './components/PhotoInspector.jsx';
 import PhotoComparison from './components/PhotoComparison.jsx';
+import CandidateComparison from './components/CandidateComparison.jsx';
 import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
@@ -491,7 +492,7 @@ export default function App() {
       });
   }
   async function downloadReport() {
-    const text = exportReport(current);
+    const text = exportReport(current, { originId: selected?.id });
     downloadFile(
       text,
       `${current.title.replace(/[^\p{L}\p{N} -]/gu, '').trim() || 'findwhere'}-report.md`,
@@ -863,9 +864,17 @@ export default function App() {
                       Location candidates{' '}
                       <span className="count-badge">{current.candidates.length}</span>
                     </h2>
-                    <button className="text-button" onClick={() => setModal('candidate')}>
-                      <Plus size={15} /> Add
-                    </button>
+                    <div className="candidate-panel-actions">
+                      <button
+                        className="text-button"
+                        onClick={() => setModal('compare-candidates')}
+                      >
+                        <Compass size={15} /> Distances
+                      </button>
+                      <button className="text-button" onClick={() => setModal('candidate')}>
+                        <Plus size={15} /> Add
+                      </button>
+                    </div>
                   </div>
                   <div className="candidate-list">
                     {current.candidates.length ? (
@@ -1428,6 +1437,14 @@ export default function App() {
             </p>
           )}
         </Modal>
+      )}
+      {modal === 'compare-candidates' && (
+        <CandidateComparison
+          candidates={current.candidates}
+          selected={selected}
+          onSelect={onSelect}
+          onClose={() => setModal(null)}
+        />
       )}
       {modal === 'compare' && current.photo && (
         <PhotoComparison
