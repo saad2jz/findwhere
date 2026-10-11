@@ -23,6 +23,7 @@ import {
   MapPin,
   Maximize2,
   Plus,
+  Pencil,
   Search,
   Settings2,
   ShieldCheck,
@@ -42,8 +43,11 @@ import {
 } from './lib/domain.mjs';
 import { loadCases, saveCase, saveCases } from './lib/storage.mjs';
 import { exportBackup, importBackup, MAX_BACKUP_BYTES } from './lib/backup.mjs';
+import { mergeAnalysis, validateCandidateEdit } from './lib/investigation.mjs';
 import { demoCase, photoSource } from './data/demo.mjs';
 import catalog from './data/resources.json';
+import Modal from './components/Modal.jsx';
+import { CandidateEditor, EvidenceEditor } from './components/InvestigationEditors.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
 
@@ -82,6 +86,10 @@ const icons = {
 const uid = () => crypto.randomUUID();
 const fmtDate = (value) =>
   new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const sourceName = (source) =>
+  ({ demo: 'Sample reference', gps: 'EXIF metadata', ai: 'AI suggestion', manual: 'Manual lead' })[
+    source
+  ];
 
 function External({ href, children, ...props }) {
   return (
@@ -93,35 +101,6 @@ function External({ href, children, ...props }) {
 function Tag({ children, tone = '' }) {
   return <span className={`tag ${tone}`}>{children}</span>;
 }
-function Modal({ title, children, onClose, wide = false }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    ref.current.showModal();
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      className={wide ? 'wide-modal' : ''}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === ref.current) onClose();
-      }}
-      aria-labelledby="modal-title"
-    >
-      <header className="modal-header">
-        <h2 id="modal-title">{title}</h2>
-        <button className="icon-button" onClick={onClose} aria-label="Close dialog">
-          <X size={20} />
-        </button>
-      </header>
-      <div className="modal-body">{children}</div>
-    </dialog>
-  );
-}
-
 export default function App() {
   const [page, setPage] = useState('workspace');
   const [current, setCurrent] = useState(demoCase);
@@ -133,6 +112,7 @@ export default function App() {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [modal, setModal] = useState(null);
+  const [editingEvidence, setEditingEvidence] = useState(null);
   const [tab, setTab] = useState('evidence');
   const [category, setCategory] = useState('all');
   const [resourceSearch, setResourceSearch] = useState('');
@@ -408,31 +388,9 @@ export default function App() {
         source: 'ai',
         status: 'hypothesis',
       }));
-      setCurrent((previous) => ({
-        ...previous,
-        updatedAt: new Date().toISOString(),
-        candidates: [...previous.candidates.filter((c) => c.source !== 'ai'), ...candidates].slice(
-          0,
-          50,
-        ),
-        clues: [
-          ...previous.clues.filter((c) => c.source !== 'AI scene analysis'),
-          ...result.clues.map((c) => ({
-            ...c,
-            id: uid(),
-            checked: false,
-            source: 'AI scene analysis',
-          })),
-        ].slice(0, 100),
-        notes: [
-          previous.notes,
-          `AI scene read (unverified): ${result.summary}`,
-          'Next checks:\n' + result.nextSteps.map((s) => '• ' + s).join('\n'),
-        ]
-          .filter(Boolean)
-          .join('\n\n')
-          .slice(0, 20000),
-      }));
+      const investigation = mergeAnalysis(currentRef.current, result, candidates);
+      currentRef.current = investigation;
+      setCurrent(investigation);
       if (candidates.length) setSelectedId(candidates[0].id);
       setMessage(
         candidates.length
@@ -483,6 +441,51 @@ export default function App() {
       ],
     });
     setNote('');
+  }
+  function saveEvidence(value) {
+    const clues = currentRef.current.clues;
+    const existing = clues.some((clue) => clue.id === value.id);
+    if (!existing && clues.length >= 100) {
+      setMessage('This investigation already has 100 evidence entries.');
+      return;
+    }
+    update({
+      clues: existing
+        ? clues.map((clue) => (clue.id === value.id ? value : clue))
+        : [...clues, value],
+    });
+    setModal(null);
+    setMessage(
+      existing
+        ? 'Evidence updated. Review changed content before checking it off.'
+        : 'Evidence added with its source details.',
+    );
+  }
+  function saveCandidate(value, changedPoint) {
+    update({
+      candidates: currentRef.current.candidates.map((candidate) =>
+        candidate.id === value.id ? value : candidate,
+      ),
+    });
+    setModal(null);
+    setMessage(
+      changedPoint
+        ? 'Location updated. Status reset to Hypothesis and confidence to Low for verification.'
+        : 'Candidate saved. Original lead details are preserved.',
+    );
+  }
+  function setCandidateStatus(status) {
+    const result = validateCandidateEdit(selected, {
+      ...selected,
+      coordinates: `${selected.lat}, ${selected.lng}`,
+      status,
+    });
+    if (result.value)
+      update({
+        candidates: currentRef.current.candidates.map((candidate) =>
+          candidate.id === selected.id ? result.value : candidate,
+        ),
+      });
   }
   async function downloadReport() {
     const text = exportReport(current);
@@ -885,13 +888,9 @@ export default function App() {
                                     : 'Hypothesis'}
                               </Tag>
                               <span>
-                                {candidate.source === 'demo'
-                                  ? 'Sample reference'
-                                  : candidate.source === 'gps'
-                                    ? 'EXIF metadata'
-                                    : candidate.source === 'ai'
-                                      ? 'AI suggestion'
-                                      : 'Manual lead'}
+                                {candidate.original
+                                  ? `Refined from ${sourceName(candidate.original.source)}`
+                                  : sourceName(candidate.source)}
                               </span>
                             </span>
                           </span>
@@ -911,18 +910,34 @@ export default function App() {
                   </div>
                   {selected && (
                     <div className="candidate-details">
+                      <div className="candidate-edit-heading">
+                        <Tag>Confidence: {selected.confidence}</Tag>
+                        <button className="text-button" onClick={() => setModal('edit-candidate')}>
+                          <Pencil size={14} /> Refine candidate
+                        </button>
+                      </div>
                       <p>{selected.reason}</p>
+                      {selected.original && (
+                        <details className="candidate-origin">
+                          <summary>Original lead · {sourceName(selected.original.source)}</summary>
+                          <p>
+                            {selected.original.name} · {selected.original.country}
+                          </p>
+                          <p>
+                            {selected.original.lat}, {selected.original.lng} ·{' '}
+                            {selected.original.status} · {selected.original.confidence} confidence
+                          </p>
+                          <p>{selected.original.reason}</p>
+                          <External href={mapLinks(selected.original).osm}>
+                            View original point <ArrowUpRight size={13} />
+                          </External>
+                        </details>
+                      )}
                       <label className="status-label">
                         Candidate status
                         <select
                           value={selected.status}
-                          onChange={(e) =>
-                            update({
-                              candidates: current.candidates.map((c) =>
-                                c.id === selected.id ? { ...c, status: e.target.value } : c,
-                              ),
-                            })
-                          }
+                          onChange={(e) => setCandidateStatus(e.target.value)}
                         >
                           <option value="hypothesis">Hypothesis</option>
                           <option value="supported">Supported by evidence</option>
@@ -954,6 +969,26 @@ export default function App() {
                         aria-controls={`tab-${value}`}
                         id={`button-${value}`}
                         onClick={() => setTab(value)}
+                        tabIndex={tab === value ? 0 : -1}
+                        onKeyDown={(event) => {
+                          const tabs = ['evidence', 'metadata', 'notes'];
+                          const index = tabs.indexOf(value);
+                          const target =
+                            event.key === 'ArrowRight'
+                              ? tabs[(index + 1) % 3]
+                              : event.key === 'ArrowLeft'
+                                ? tabs[(index + 2) % 3]
+                                : event.key === 'Home'
+                                  ? tabs[0]
+                                  : event.key === 'End'
+                                    ? tabs[2]
+                                    : null;
+                          if (target) {
+                            event.preventDefault();
+                            setTab(target);
+                            document.getElementById(`button-${target}`).focus();
+                          }
+                        }}
                         className={tab === value ? 'active' : ''}
                       >
                         {label}
@@ -989,7 +1024,10 @@ export default function App() {
                                 <p>{clue.text}</p>
                                 <small>
                                   {clue.source}
-                                  {clue.url && (
+                                  {clue.observedOn && (
+                                    <span>Reference date: {clue.observedOn}</span>
+                                  )}
+                                  {clue.url && safeUrl(clue.url) && (
                                     <External href={clue.url}>
                                       {' '}
                                       View source <ArrowUpRight size={11} />
@@ -997,6 +1035,16 @@ export default function App() {
                                   )}
                                 </small>
                               </div>
+                              <button
+                                className="icon-button evidence-edit"
+                                aria-label={`Edit evidence: ${clue.text}`}
+                                onClick={() => {
+                                  setEditingEvidence(clue);
+                                  setModal('evidence');
+                                }}
+                              >
+                                <Pencil size={15} />
+                              </button>
                             </div>
                           ))
                         ) : (
@@ -1027,12 +1075,22 @@ export default function App() {
                             <Plus size={18} />
                           </button>
                         </form>
+                        <button
+                          className="text-button sourced-evidence"
+                          disabled={current.clues.length >= 100}
+                          onClick={() => {
+                            setEditingEvidence(null);
+                            setModal('evidence');
+                          }}
+                        >
+                          <Plus size={15} /> Add sourced evidence
+                        </button>
                       </>
                     )}
                     {tab === 'metadata' && (
                       <>
                         <p className="metadata-notice">
-                          {current.demo
+                          {referencePhoto
                             ? 'Published reference metadata from the sample photo source.'
                             : 'Read directly from your original file in this browser. Metadata can be altered.'}
                         </p>
@@ -1334,6 +1392,20 @@ export default function App() {
       )}
       {modal === 'candidate' && (
         <CandidateModal onClose={() => setModal(null)} onAdd={addCandidate} />
+      )}
+      {modal === 'evidence' && (
+        <EvidenceEditor
+          evidence={editingEvidence}
+          onClose={() => setModal(null)}
+          onSave={saveEvidence}
+        />
+      )}
+      {modal === 'edit-candidate' && selected && (
+        <CandidateEditor
+          candidate={selected}
+          onClose={() => setModal(null)}
+          onSave={saveCandidate}
+        />
       )}
       {modal === 'photo' && (
         <Modal title="Source image" onClose={() => setModal(null)} wide>

@@ -4,14 +4,18 @@ export const pointSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
   lng: z.number().finite().min(-180).max(180),
 });
-export const candidateSchema = pointSchema.extend({
-  id: z.string().min(1).max(100),
+const candidateDetailsSchema = pointSchema.extend({
   name: z.string().min(1).max(300),
   country: z.string().max(100),
   confidence: z.enum(['low', 'medium', 'high']),
   status: z.enum(['hypothesis', 'supported', 'ruled-out']),
   source: z.enum(['manual', 'gps', 'ai', 'demo']),
   reason: z.string().max(2000),
+});
+export const candidateSchema = candidateDetailsSchema.extend({
+  id: z.string().min(1).max(100),
+  original: candidateDetailsSchema.optional(),
+  editedAt: z.iso.datetime().optional(),
 });
 export const clueSchema = z.object({
   id: z.string().min(1).max(100),
@@ -20,6 +24,8 @@ export const clueSchema = z.object({
   source: z.string().max(200),
   checked: z.boolean(),
   url: z.string().max(2000).optional(),
+  observedOn: z.iso.date().optional(),
+  editedAt: z.iso.datetime().optional(),
 });
 export const caseSchema = z.object({
   id: z.string().min(1).max(100),
@@ -170,12 +176,23 @@ export function exportReport(investigation) {
       `[OpenStreetMap](<${mapLinks(candidate).osm}>)`,
       '',
     );
+    if (candidate.original) {
+      const original = candidate.original;
+      lines.push(
+        `Original lead: ${md(original.name)} (${md(original.country)}); source: ${original.source}; coordinates: ${original.lat}, ${original.lng}`,
+        `Original status: ${original.status}; confidence: ${original.confidence}`,
+        '',
+        `Original reasoning: ${md(original.reason)}`,
+        '',
+      );
+    }
   }
   lines.push('## Evidence ledger', '');
   for (const clue of data.clues) {
     lines.push(
       `- [${clue.checked ? 'x' : ' '}] ${md(clue.category)}: ${md(clue.text)} (source: ${md(clue.source)})`,
     );
+    if (clue.observedOn) lines.push(`  Reference date: ${clue.observedOn}`);
     if (clue.url && safeUrl(clue.url))
       lines.push(`  Source: <${safeUrl(clue.url).replaceAll('<', '%3C').replaceAll('>', '%3E')}>`);
   }

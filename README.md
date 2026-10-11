@@ -13,8 +13,10 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
 - **Photo intake:** JPEG, PNG, and WebP upload or drag and drop; local EXIF extraction; automatic GPS candidates.
 - **Investigation map:** interactive candidate markers, street/satellite layers, zoom, recentering, and external
   Google Maps/Street View links.
-- **Location candidates:** search named places or enter WGS84 coordinates; mark hypotheses supported or ruled out.
-- **Evidence ledger:** record observations, check evidence, inspect metadata, and write investigation notes.
+- **Location candidates:** search named places or enter WGS84 coordinates; refine names, points, confidence,
+  and reasoning; mark hypotheses supported or ruled out. Refinements retain the original lead and source.
+- **Evidence ledger:** record and edit observations with categories, source URLs, and reference dates; check
+  evidence, inspect metadata, and write investigation notes. Editing evidence clears its checked status.
 - **Saved investigations:** photos, candidates, and notes persist in IndexedDB on the current browser/device.
 - **Portable backups:** download one investigation or the entire workspace as JSON, including photos and evidence;
   import on another browser without overwriting existing work.
@@ -72,6 +74,16 @@ AI is a source of leads. It does not verify Street View matches, guarantee locat
 probabilities. Generic scenes may return clues with no location candidates. Compare independent imagery and
 record evidence before supporting a candidate. EXIF GPS is also a lead: metadata can be edited.
 
+Use **Refine candidate** to adjust a lead and record your reasoning. The original coordinates, status,
+confidence, and source remain available under **Original lead** and in exports. Moving the point resets
+its current status to Hypothesis and confidence to Low until you check the new viewpoint. Investigator
+refinements become manual leads and survive subsequent AI scene analyses.
+
+Use **Add sourced evidence** to attach a URL and reference date, or the pencil beside an entry to edit it.
+New evidence starts unchecked; changing its observation or source clears the check for a fresh review.
+Reviewed and edited AI observations also survive later analyses. A reference date describes the source material and
+does not claim the investigation photo was captured on that date.
+
 Implementation references: [image input](https://developers.openai.com/api/docs/guides/images-vision) and
 [structured output](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
 
@@ -114,7 +126,8 @@ npm run check
 ```
 
 Tests cover coordinate bounds/precision, contextual links, safe URLs, report exports, catalog attribution,
-backup round trips, import validation and identity isolation, archive compatibility, sample copying, API
+backup round trips, import validation and identity isolation, archive compatibility, sample copying,
+evidence editing and source validation, candidate refinement and provenance, API
 configuration, request/output validation, error handling, origin checks, rate limiting, and cached/throttled
 geocoding. AI and geocoder API tests use mocks and make no paid API calls. Live AI verification requires a
 configured key and model access.
@@ -139,6 +152,7 @@ src/lib/domain.mjs          Validated cases, coordinates, reports, and analysis 
 src/lib/photo.mjs           Local image resizing and EXIF extraction
 src/lib/storage.mjs         IndexedDB persistence
 src/lib/backup.mjs          Versioned JSON backups and validated imports
+src/lib/investigation.mjs   Evidence validation and candidate refinement rules
 src/data/resources.json     Curated and attributed OSINT resources
 server/app.mjs              Health, geocoding, and optional AI endpoints
 tests/                      Offline domain and API regression tests

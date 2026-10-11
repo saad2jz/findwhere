@@ -406,6 +406,8 @@ h1 {
   line-height: 1.7;
 }
 .heading-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
   display: flex;
   gap: 9px;
   flex-shrink: 0;
@@ -1057,6 +1059,7 @@ h1 {
   align-items: center;
   gap: 7px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 .candidate-tags > span:last-child:not(.tag) {
   font-size: 7px;
@@ -1158,6 +1161,121 @@ h1 {
   gap: 10px;
   padding: 12px 0;
   border-bottom: 1px solid #edf0e6;
+}
+.clue-row > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.evidence-edit {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  align-self: flex-start;
+}
+.sourced-evidence {
+  margin-top: 12px;
+  min-height: 44px;
+}
+.candidate-edit-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.candidate-edit-heading button {
+  min-height: 44px;
+}
+.candidate-origin {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #dfe7d5;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #536544;
+  line-height: 1.7;
+}
+.candidate-origin summary {
+  cursor: pointer;
+  min-height: 32px;
+}
+.candidate-origin p {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.candidate-origin a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.investigation-editor {
+  display: grid;
+  gap: 16px;
+}
+.editor-field {
+  min-width: 0;
+}
+.editor-field label {
+  display: block;
+  font-size: 13px;
+  color: #536544;
+  margin-bottom: 7px;
+  line-height: 1.5;
+}
+.editor-field input,
+.editor-field textarea,
+.editor-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  font-size: 14px;
+  min-height: 44px;
+}
+.editor-field [aria-invalid='true'] {
+  border-color: #ac5640;
+}
+.editor-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.investigation-editor .editor-hint {
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+  color: #65715e;
+}
+.editor-field .field-error {
+  font-size: 12px;
+  color: #813e2e;
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.editor-errors {
+  border: 1px solid #dfb6a9;
+  background: #fff5f0;
+  border-radius: 8px;
+  padding: 14px;
+  color: #813e2e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.editor-errors ul {
+  padding-left: 20px;
+  margin: 8px 0 0;
+}
+.editor-errors a {
+  color: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .editor-columns {
+    grid-template-columns: 1fr;
+  }
 }
 .clue-check {
   margin-top: 2px;
