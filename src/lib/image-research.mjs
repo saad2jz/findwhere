@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+const geoPoint = z.object({
+  lat: z.number().finite().min(-90).max(90),
+  lng: z.number().finite().min(-180).max(180),
+});
+export const nearbyReferenceRequestSchema = geoPoint
+  .extend({
+    radius: z.union([z.literal(500), z.literal(1000), z.literal(2000), z.literal(5000)]),
+  })
+  .strict();
+export const referenceDiscoverySchema = nearbyReferenceRequestSchema.extend({
+  method: z.literal('nearby'),
+  geotag: geoPoint,
+  distanceMetres: z.number().finite().min(0).max(5000),
+});
+
 export const comparisonSchema = z.object({
   verdict: z.enum(['supports', 'different', 'inconclusive']),
   summary: z.string().min(1).max(1200),

@@ -5,6 +5,7 @@ import PhotoInspector from './PhotoInspector.jsx';
 import { referenceDetailsSchema, referenceSchema, safeUrl } from '../lib/domain.mjs';
 import { comparisonSchema, comparisonVerdicts } from '../lib/image-research.mjs';
 import ImageResearch from './ImageResearch.jsx';
+import { formatDistance } from '../lib/geo.mjs';
 
 export default function PhotoComparison({
   investigation,
@@ -17,6 +18,7 @@ export default function PhotoComparison({
   onUnlock,
   startResearch,
   placeName,
+  candidate,
 }) {
   const reference = investigation.reference;
   const input = useRef(null);
@@ -152,6 +154,7 @@ export default function PhotoComparison({
         <ImageResearch
           investigation={investigation}
           placeName={placeName}
+          candidate={candidate}
           disabled={loading || aiBusy}
           onBusy={setResearchBusy}
           onReference={(value) => {
@@ -258,6 +261,16 @@ export default function PhotoComparison({
           <a href={safeUrl(reference.sourceUrl)} target="_blank" rel="noopener noreferrer">
             View source & license
           </a>
+        </p>
+      )}
+      {reference?.discovery && (
+        <p className="reference-attribution">
+          Found within {formatDistance(reference.discovery.radius)} of{' '}
+          {reference.discovery.lat.toFixed(5)}, {reference.discovery.lng.toFixed(5)}. Reported file
+          geotag: {reference.discovery.geotag.lat.toFixed(5)},{' '}
+          {reference.discovery.geotag.lng.toFixed(5)} (
+          {formatDistance(reference.discovery.distanceMetres)} from search point). Proximity does
+          not establish a visual match.
         </p>
       )}
       {reference && (

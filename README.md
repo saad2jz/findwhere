@@ -90,6 +90,16 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   Results retain their coordinates, sources and retrieval time in the case, backup and report; moving a candidate
   flags the saved results as stale. Each provider can fail independently without discarding the other checks.
   Services discovered through [API Vault](https://apivault.dev/) are integrated directly using their official APIs.
+- **Nearby reference photos without AI credits:** choose **Find reference photos** on a candidate, then
+  **Find photos nearby**. Search Wikimedia Commons file geotags within 500 m, 1 km, 2 km or 5 km; up to
+  six attributed raster previews are ordered by geotag distance, not visual similarity. Choose an independent
+  view for the existing side-by-side comparison. The search point, radius, file geotag, distance, source
+  and license are saved with a selected reference and survive backups and reports. File geotags can describe
+  the photographer or subject; coverage is incomplete and proximity does not verify the photo's location.
+  The sample's own Commons image cannot be selected as its reference. Coordinates go to Wikimedia only
+  when you submit the nearby search; your investigation photo is not sent. The server bounds each request
+  to 12 file records / 2 MB / 15 seconds, shares the text-search throttle and cache, and caps uncached nearby
+  requests at 90 per UTC day (including failures; in memory, resets on restart). No API key is required.
 - **Evidence ledger:** record and edit observations with categories, source URLs, and reference dates; check
   evidence, inspect metadata, and write investigation notes. Editing evidence clears its checked status.
 - **Saved investigations:** photos, candidates, and notes persist in IndexedDB on the current browser/device.

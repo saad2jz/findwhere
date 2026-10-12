@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { comparisonSchema, comparisonVerdicts } from './image-research.mjs';
+import {
+  comparisonSchema,
+  comparisonVerdicts,
+  referenceDiscoverySchema,
+} from './image-research.mjs';
 import { compareCandidates, formatBearing, formatDistance } from './geo.mjs';
 import { researchLeadSchema, modelLeadSchema, modelLeadsJsonSchema } from './research-leads.mjs';
 import { pipelineSchema } from './search-pipeline.mjs';
@@ -85,6 +89,7 @@ export const referenceSchema = referenceDetailsSchema.extend({
   photo: photoSchema,
   fileName: z.string().min(1).max(300),
   attribution: z.string().max(1200).optional(),
+  discovery: referenceDiscoverySchema.optional(),
   comparison: comparisonSchema
     .extend({ comparedAt: z.iso.datetime(), provider: z.string().max(100) })
     .optional(),
@@ -240,6 +245,15 @@ export function exportReport(investigation, { originId } = {}) {
     );
     if (data.reference.attribution)
       lines.push('', `Reference attribution: ${md(data.reference.attribution)}`);
+    if (data.reference.discovery) {
+      const discovery = data.reference.discovery;
+      lines.push(
+        '',
+        `Found by nearby photo search: ${discovery.lat}, ${discovery.lng}; radius ${discovery.radius} m.`,
+        `Reported file geotag: ${discovery.geotag.lat}, ${discovery.geotag.lng}; ${formatDistance(discovery.distanceMetres)} from the search point.`,
+        'A file geotag can refer to the photographer or subject; proximity does not establish a visual match.',
+      );
+    }
     const comparison = data.reference.comparison;
     if (comparison) {
       lines.push(

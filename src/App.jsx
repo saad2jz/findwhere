@@ -1213,6 +1213,18 @@ export default function App() {
                           setSelectedId(candidate.id);
                         }}
                       />
+                      {current.photo && (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => {
+                            setResearchQuery(selected.name);
+                            setModal('image-research');
+                          }}
+                        >
+                          Find reference photos
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1694,6 +1706,7 @@ export default function App() {
           onChange={(reference) => update({ reference })}
           onClose={() => setModal(null)}
           startResearch={modal === 'image-research'}
+          candidate={selected}
           placeName={
             (modal === 'image-research' && researchQuery) ||
             selected?.name ||

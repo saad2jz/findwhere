@@ -14,6 +14,7 @@ import {
   comparisonSchema,
   comparisonJsonSchema,
   assessComparison,
+  nearbyReferenceRequestSchema,
 } from '../src/lib/image-research.mjs';
 import { createReferenceSearch } from './references.mjs';
 import { createSearchWaterfall, defaultSearchLimits } from './search-waterfall.mjs';
@@ -226,6 +227,31 @@ export function createApp({
         error:
           'Wikimedia reference search is unavailable. You can still import a reference photo or screenshot.',
       });
+    }
+  });
+
+  app.post('/api/references/nearby', async (req, res) => {
+    const input = nearbyReferenceRequestSchema.safeParse(req.body);
+    if (!input.success)
+      return res
+        .status(400)
+        .json({ error: 'Use valid coordinates and a 500–5,000 m search radius.' });
+    try {
+      const results = await searchReferences(input.data);
+      if (!results)
+        return res
+          .status(429)
+          .json({
+            error: 'Reference searches are busy or the daily limit is reached. Try again later.',
+          });
+      res.json({ results });
+    } catch {
+      res
+        .status(502)
+        .json({
+          error:
+            'Nearby photo search is unavailable. Try a place name or import a reference photo.',
+        });
     }
   });
 

@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Download, LoaderCircle, Search } from 'lucide-react';
+import { ArrowUpRight, Download, LoaderCircle, MapPinned, Search } from 'lucide-react';
 import { commonsImageUrl } from '../lib/image-research.mjs';
+import { formatDistance } from '../lib/geo.mjs';
+import { photoSource } from '../data/demo.mjs';
 
-export default function ImageResearch({ investigation, placeName, onReference, disabled, onBusy }) {
+export default function ImageResearch({
+  investigation,
+  placeName,
+  candidate,
+  onReference,
+  disabled,
+  onBusy,
+}) {
   const [query, setQuery] = useState(placeName || '');
+  const [radius, setRadius] = useState(1000);
+  const [searchedPoint, setSearchedPoint] = useState(null);
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -48,7 +59,7 @@ export default function ImageResearch({ investigation, placeName, onReference, d
       if (token === version.current) setBusy('');
     }
   }
-  async function search(event) {
+  async function search(event, nearby = false) {
     event.preventDefault();
     if (busy || disabled) return;
     const token = ++version.current;
@@ -56,8 +67,15 @@ export default function ImageResearch({ investigation, placeName, onReference, d
     setError('');
     setStatus('');
     setResults(null);
+    setSearchedPoint(nearby ? { lat: candidate.lat, lng: candidate.lng, radius } : null);
     try {
-      const response = await fetch(`/api/references?${new URLSearchParams({ q: query.trim() })}`);
+      const response = nearby
+        ? await fetch('/api/references/nearby', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: candidate.lat, lng: candidate.lng, radius }),
+          })
+        : await fetch(`/api/references?${new URLSearchParams({ q: query.trim() })}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Reference search unavailable.');
       if (version.current === token) setResults(result.results);
@@ -115,6 +133,7 @@ export default function ImageResearch({ investigation, placeName, onReference, d
         fileName: photo.fileName,
         sourceUrl: item.source,
         attribution: item.attribution,
+        ...(item.discovery ? { discovery: item.discovery } : {}),
         notes: item.date ? `Reference capture date reported by Wikimedia: ${item.date}.` : '',
       });
       setStatus(
@@ -194,6 +213,41 @@ export default function ImageResearch({ investigation, placeName, onReference, d
           <Search size={16} /> Search references
         </button>
       </form>
+      {candidate ? (
+        <form
+          className="reference-search-form nearby-reference-form"
+          onSubmit={(event) => search(event, true)}
+        >
+          <div>
+            <h4>Or search near this candidate</h4>
+            <p>
+              {candidate.name} · {candidate.lat.toFixed(5)}, {candidate.lng.toFixed(5)}. Sends this
+              point and radius to Wikimedia Commons. Your photo stays here.
+            </p>
+            <label htmlFor="reference-radius">Photo search radius</label>
+            <select
+              id="reference-radius"
+              value={radius}
+              disabled={Boolean(busy) || disabled}
+              onChange={(event) => setRadius(Number(event.target.value))}
+            >
+              <option value={500}>500 m</option>
+              <option value={1000}>1 km</option>
+              <option value={2000}>2 km</option>
+              <option value={5000}>5 km</option>
+            </select>
+          </div>
+          <button className="button secondary" disabled={Boolean(busy) || disabled}>
+            <MapPinned size={16} aria-hidden="true" /> Find photos nearby
+          </button>
+        </form>
+      ) : (
+        <p className="subtle">Add a map candidate to search for geotagged photos nearby.</p>
+      )}
+      <p className="subtle">
+        Nearby photos are ordered by distance from their file geotag. A geotag can describe the
+        photographer or the subject. Coverage is incomplete; check the scene and source.
+      </p>
       {busy && (
         <p role="status">
           <LoaderCircle className="spin" size={16} />{' '}
@@ -216,35 +270,58 @@ export default function ImageResearch({ investigation, placeName, onReference, d
       )}
       {results?.length === 0 && (
         <p role="status">
-          No reference photos found. Try the local name or import a result from Lens or TinEye.
+          {searchedPoint
+            ? 'No geotagged photo previews found in this radius. Try a wider area, search by name or import a reference.'
+            : 'No reference photos found. Try the local name or import a result from Lens or TinEye.'}
         </p>
       )}
       {Boolean(results?.length) && (
-        <div className="reference-results">
-          {results.map((item) => (
-            <article key={item.source}>
-              <img
-                src={item.thumbnail}
-                alt={item.title}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-              <h4>{item.title}</h4>
-              <p>{item.attribution}</p>
-              {item.date && <p>Reported date: {item.date}</p>}
-              <a href={item.source} target="_blank" rel="noopener noreferrer">
-                Source & license <ArrowUpRight size={13} />
-              </a>
-              <button
-                className="button secondary"
-                disabled={Boolean(busy) || disabled}
-                onClick={() => useReference(item)}
-              >
-                Use reference: {item.title}
-              </button>
-            </article>
-          ))}
-        </div>
+        <>
+          <p role="status">
+            {results.length} reference previews
+            {searchedPoint
+              ? ` near ${searchedPoint.lat.toFixed(5)}, ${searchedPoint.lng.toFixed(5)} within ${formatDistance(searchedPoint.radius)}`
+              : ' from your text search'}
+            . Choose an independent view; matching the same photo does not verify a location.
+          </p>
+          <div className="reference-results">
+            {results.map((item) => (
+              <article key={item.source}>
+                <img
+                  src={item.thumbnail}
+                  alt={item.title}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+                <h4>{item.title}</h4>
+                <p>{item.attribution}</p>
+                {item.date && <p>Reported date: {item.date}</p>}
+                {item.discovery && (
+                  <p>
+                    File geotag · {formatDistance(item.discovery.distanceMetres)} from search point
+                  </p>
+                )}
+                {investigation.photo === '/lisbon.jpg' && item.source === photoSource && (
+                  <p>This is the investigation’s sample photo. Choose another view.</p>
+                )}
+                <a href={item.source} target="_blank" rel="noopener noreferrer">
+                  Source & license <ArrowUpRight size={13} />
+                </a>
+                <button
+                  className="button secondary"
+                  disabled={
+                    Boolean(busy) ||
+                    disabled ||
+                    (investigation.photo === '/lisbon.jpg' && item.source === photoSource)
+                  }
+                  onClick={() => useReference(item)}
+                >
+                  Use reference: {item.title}
+                </button>
+              </article>
+            ))}
+          </div>
+        </>
       )}
     </section>
   );
