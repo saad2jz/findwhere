@@ -90,7 +90,9 @@ export default function MapPanel({ candidates, selected, onSelect }) {
       <div className="map-label">
         <span className="live-dot" />{' '}
         {selected?.mapReference
-          ? 'Geocoded landmark reference'
+          ? selected.mapReference.method === 'nearby'
+            ? 'Nearby public map record'
+            : 'Geocoded landmark reference'
           : selected?.source === 'ai'
             ? 'Approximate AI reference point'
             : selected

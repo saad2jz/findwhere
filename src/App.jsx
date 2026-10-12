@@ -61,6 +61,7 @@ import { CandidateEditor, EvidenceEditor } from './components/InvestigationEdito
 import { resolvePlaceReference } from './lib/place-match.mjs';
 import { readPipelineResponse } from './lib/search-pipeline.mjs';
 import { PipelineProgress } from './components/PipelineResults.jsx';
+import LocationContext from './components/LocationContext.jsx';
 
 const MapPanel = lazy(() => import('./components/MapPanel.jsx'));
 
@@ -1076,7 +1077,9 @@ export default function App() {
                       {selected.mapReference && (
                         <div className="analysis-correction">
                           <p>
-                            Landmark coordinates from the geocoder. The camera position is unknown.
+                            {selected.mapReference.method === 'nearby'
+                              ? 'Public map record coordinates; geometry centers can differ from entrances. The camera position is unknown.'
+                              : 'Landmark coordinates from the geocoder. The camera position is unknown.'}
                           </p>
                           <External href={selected.mapReference.url}>
                             {selected.mapReference.attribution} <ArrowUpRight size={13} />
@@ -1156,6 +1159,60 @@ export default function App() {
                           Street View <ArrowUpRight size={13} />
                         </External>
                       </div>
+                      <LocationContext
+                        key={`${current.id}:${selected.id}:${selected.lat}:${selected.lng}`}
+                        candidate={selected}
+                        canAdd={current.candidates.length < 50}
+                        onSave={(locationContext) => {
+                          const live = currentRef.current;
+                          if (
+                            live.id !== current.id ||
+                            !live.candidates.some(
+                              (c) =>
+                                c.id === selected.id &&
+                                c.lat === locationContext.lat &&
+                                c.lng === locationContext.lng,
+                            )
+                          )
+                            return;
+                          update({
+                            candidates: live.candidates.map((c) =>
+                              c.id === selected.id ? { ...c, locationContext } : c,
+                            ),
+                          });
+                        }}
+                        onAdd={(place) => {
+                          const live = currentRef.current;
+                          if (live.candidates.length >= 50) return;
+                          const existing = live.candidates.find(
+                            (c) => c.mapReference?.url === place.url,
+                          );
+                          if (existing) {
+                            setSelectedId(existing.id);
+                            return;
+                          }
+                          const candidate = {
+                            id: uid(),
+                            name: place.name,
+                            country: selected.country,
+                            lat: place.lat,
+                            lng: place.lng,
+                            source: 'manual',
+                            status: 'hypothesis',
+                            confidence: 'low',
+                            reason:
+                              'Added from nearby OpenStreetMap records. This public place has not been matched to the investigation photo.',
+                            mapReference: {
+                              method: 'nearby',
+                              label: place.name,
+                              url: place.url,
+                              attribution: '© OpenStreetMap contributors',
+                            },
+                          };
+                          update({ candidates: [...live.candidates, candidate] });
+                          setSelectedId(candidate.id);
+                        }}
+                      />
                     </div>
                   )}
                 </div>

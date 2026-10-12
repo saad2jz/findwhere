@@ -3,6 +3,7 @@ import { comparisonSchema, comparisonVerdicts } from './image-research.mjs';
 import { compareCandidates, formatBearing, formatDistance } from './geo.mjs';
 import { researchLeadSchema, modelLeadSchema, modelLeadsJsonSchema } from './research-leads.mjs';
 import { pipelineSchema } from './search-pipeline.mjs';
+import { locationContextSchema, contextMatchesCandidate } from './location-context.mjs';
 
 export const pointSchema = z.object({
   lat: z.number().finite().min(-90).max(90),
@@ -13,6 +14,7 @@ const visualEvidenceSchema = z.object({
   distinctiveMatch: z.string().max(1000),
 });
 const mapReferenceSchema = z.object({
+  method: z.enum(['geocoder', 'nearby']).optional(),
   label: z.string().min(1).max(300),
   attribution: z.string().max(200),
   url: z
@@ -43,6 +45,7 @@ const candidateDetailsSchema = pointSchema.extend({
   mapReference: mapReferenceSchema.optional(),
   modelPoint: pointSchema.optional(),
   searchCheckId: z.string().max(80).optional(),
+  locationContext: locationContextSchema.optional(),
 });
 export const candidateSchema = candidateDetailsSchema.extend({
   id: z.string().min(1).max(100),
@@ -279,7 +282,7 @@ export function exportReport(investigation, { originId } = {}) {
       );
     if (candidate.mapReference) {
       lines.push(
-        `Geocoded landmark reference (not camera position): ${md(candidate.mapReference.label)}`,
+        `${candidate.mapReference.method === 'nearby' ? 'Nearby public map record' : 'Geocoded landmark reference'} (not camera position): ${md(candidate.mapReference.label)}`,
         `${md(candidate.mapReference.attribution)}; source: <${safeUrl(candidate.mapReference.url)}>`,
         '',
       );
@@ -295,6 +298,49 @@ export function exportReport(investigation, { originId } = {}) {
         '',
       );
       for (const feature of candidate.visualEvidence.features) lines.push(`- ${md(feature)}`);
+      lines.push('');
+    }
+    if (candidate.locationContext) {
+      const context = candidate.locationContext;
+      lines.push(
+        '#### Location context · comparison material',
+        '',
+        `Retrieved: ${context.fetchedAt}; checked point: ${context.lat}, ${context.lng}; radius: ${context.radius} m.`,
+        contextMatchesCandidate(context, candidate)
+          ? 'Applies to the current candidate point.'
+          : 'Stale: candidate coordinates changed after this check.',
+        'Nearby records, terrain and weather do not identify the photo or verify a candidate.',
+        '',
+      );
+      lines.push(
+        `Nearby places (${context.nearby.status}): ${md(context.nearby.attribution)}; <${context.nearby.source}>`,
+      );
+      for (const item of context.nearby.items)
+        lines.push(
+          `- ${md(item.name)} (${md(item.type)}): ${formatDistance(item.distanceMetres)}, ${formatBearing(item.bearing)}; <${item.url}>`,
+        );
+      lines.push(
+        '',
+        `Terrain (${context.terrain.status}): ${md(context.terrain.attribution)}; <${context.terrain.source}>`,
+        'Raster estimates at five sample points; not a surveyed elevation or continuous terrain profile.',
+      );
+      for (const sample of context.terrain.samples)
+        lines.push(
+          `- ${sample.direction}: ${sample.elevation ?? 'No data'} m; ${sample.dataset}; ${sample.lat}, ${sample.lng}`,
+        );
+      if (context.date) {
+        const weather = context.weather;
+        lines.push(
+          '',
+          `Weather (${weather.status}) for ${context.date}: ${md(weather.attribution)}; <${weather.source}>`,
+          'ERA5 reanalysis on an approximately 25 km grid; daily values cannot establish conditions at the moment of the photo.',
+        );
+        if (weather.status === 'available')
+          lines.push(
+            `Temperature: ${weather.minimum ?? 'No data'}–${weather.maximum ?? 'No data'} °C; precipitation: ${weather.precipitation ?? 'No data'} mm; mean cloud cover: ${weather.cloudCover ?? 'No data'}%.`,
+            `Sunrise: ${md(weather.sunrise ?? 'No data')}; sunset: ${md(weather.sunset ?? 'No data')}; timezone: ${md(weather.timezone)}.`,
+          );
+      }
       lines.push('');
     }
     if (candidate.original) {

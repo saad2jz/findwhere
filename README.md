@@ -81,6 +81,15 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   from any candidate, sorted nearest first with statuses retained. Reports use the selected candidate as origin.
   Calculations use a sphere with a 6,371 km radius, ignore routes and terrain, and do not rank likelihood or
   indicate the camera viewing direction. [Calculation method](https://www.movable-type.co.uk/scripts/latlong.html).
+- **Location context without AI credits:** select a candidate and expand **Check the surroundings**.
+  Search a 500 m, 1 km or 2 km radius for public places and named roads, fuel stations, or landmarks and parks.
+  Up to 20 returned OpenStreetMap records show straight-line distance and initial bearing; add a record as an
+  explicitly unverified lead. Five terrain samples (center and cardinal directions) use SRTM90m with ASTER30m
+  fallback through Open Topo Data. An optional photo date retrieves daily ERA5 temperature, precipitation,
+  cloud cover and sunrise/sunset through Open-Meteo. These are comparison materials, not photo identification.
+  Results retain their coordinates, sources and retrieval time in the case, backup and report; moving a candidate
+  flags the saved results as stale. Each provider can fail independently without discarding the other checks.
+  Services discovered through [API Vault](https://apivault.dev/) are integrated directly using their official APIs.
 - **Evidence ledger:** record and edit observations with categories, source URLs, and reference dates; check
   evidence, inspect metadata, and write investigation notes. Editing evidence clears its checked status.
 - **Saved investigations:** photos, candidates, and notes persist in IndexedDB on the current browser/device.
@@ -225,6 +234,21 @@ and `GEOCODER_USER_AGENT` for another compatible service or a deployment with gr
 Research links open external sites; contextual map links embed the selected candidate coordinates. Most
 directory entries open a landing page for manual input, rather than claiming a native service integration.
 Network failures show a useful fallback; manual coordinates and case notes still work.
+
+Location-context checks send only the selected coordinates, radius/category and optional date through the
+server to fixed Overpass, Open Topo Data and Open-Meteo endpoints. Photos and notes are not sent. Public
+map coverage is incomplete; distances use geometry centers, not entrances or routes. Elevation is a raster
+estimate at approximately 30–90 m resolution, not building height or a reconstructed skyline. Historical weather
+is ERA5 reanalysis on an approximately 25 km grid and cannot establish conditions at the instant of a photo.
+Dates must be from 1940 through seven days ago. Open-Meteo's free endpoint is for **non-commercial use**.
+These checks need no API key or AI login; the app is intended for personal use. Shared public services may
+be unavailable. The server caches complete results for six hours and partial results for one minute, spaces
+new lookups by at least 1.5 seconds, allows two concurrent lookups and caps new lookups at 500 per UTC day.
+These in-memory limits reset on restart and are not distributed quotas. No automatic retries are made.
+See [Overpass shared-service guidance](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
+[Open Topo Data API and limits](https://www.opentopodata.org/api/),
+[Open-Meteo historical data](https://open-meteo.com/en/docs/historical-weather-api) and
+[Open-Meteo terms](https://open-meteo.com/en/terms).
 
 The server is intended for personal use. Production AI fails closed unless a 16–200 character
 `AI_ACCESS_PASSWORD` and an HTTPS application origin are configured. The password unlocks only AI;

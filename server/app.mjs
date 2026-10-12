@@ -1,4 +1,6 @@
 import express from 'express';
+import { createLocationContext, ContextBusy } from './location-context.mjs';
+import { contextRequestSchema } from '../src/lib/location-context.mjs';
 import OpenAI from 'openai';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -106,6 +108,7 @@ export function createApp({
       process.env.GEOCODER_USER_AGENT || 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)',
   });
   const searchReferences = createReferenceSearch({ fetcher, now });
+  const locationContext = createLocationContext({ fetcher, now });
   const waterfall = createSearchWaterfall({
     fetcher,
     now,
@@ -217,6 +220,31 @@ export function createApp({
         error:
           'Wikimedia reference search is unavailable. You can still import a reference photo or screenshot.',
       });
+    }
+  });
+
+  app.post('/api/location-context', async (req, res) => {
+    const input = contextRequestSchema.safeParse(req.body);
+    if (!input.success)
+      return res
+        .status(400)
+        .json({
+          error: 'Use valid coordinates, a 500–2,000 m radius, and an optional historical date.',
+        });
+    try {
+      res.json(await locationContext(input.data));
+    } catch (error) {
+      if (error instanceof ContextBusy)
+        return res
+          .status(429)
+          .json({
+            error: 'Location checks are busy or the daily limit is reached. Try again later.',
+          });
+      if (error instanceof RangeError)
+        return res.status(400).json({ error: 'Choose a date from 1940 through seven days ago.' });
+      res
+        .status(502)
+        .json({ error: 'Location context is unavailable. Your investigation is preserved.' });
     }
   });
 

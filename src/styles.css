@@ -1,5 +1,159 @@
 @import '@fontsource-variable/inter';
 
+.location-context {
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 20px;
+  overflow-wrap: anywhere;
+}
+.location-context > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  cursor: pointer;
+  min-height: 44px;
+  font-weight: 650;
+}
+.location-context > summary::after {
+  content: '+';
+  margin-left: auto;
+}
+.location-context[open] > summary::after {
+  content: '−';
+}
+.location-context > summary::-webkit-details-marker {
+  display: none;
+}
+.candidate-details .location-context p {
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 12px 0;
+}
+.location-context label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 550;
+}
+.candidate-details .location-context input,
+.candidate-details .location-context select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.context-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.candidate-details .location-context .context-disclosure,
+.candidate-details .location-context .context-footnote {
+  font-size: 13px;
+  color: var(--muted);
+}
+.location-context a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.context-results {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.context-results h4 {
+  margin: 24px 0 12px;
+  font-size: 16px;
+}
+.nearby-places {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.nearby-places li {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.nearby-places li > div {
+  min-width: 0;
+}
+.nearby-places a {
+  font-size: 14px;
+  font-weight: 550;
+}
+.nearby-places small {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.nearby-places button {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+}
+.terrain-samples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+  gap: 8px;
+}
+.terrain-samples > div {
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--soft);
+}
+.terrain-samples dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.terrain-samples dd {
+  margin: 8px 0;
+  font-weight: 650;
+  font-size: 17px;
+}
+.terrain-samples small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.context-weather > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.context-weather dd {
+  margin: 0;
+  font-weight: 550;
+}
+.context-source {
+  font-size: 12px;
+  color: var(--muted);
+}
+.location-context .context-error {
+  color: var(--gold);
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+@media (max-width: 420px) {
+  .context-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 :root {
   font-family:
     'Inter Variable',
