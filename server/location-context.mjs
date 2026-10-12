@@ -2,7 +2,10 @@ import { contextRequestSchema, locationContextSchema } from '../src/lib/location
 import { distanceAndBearing } from '../src/lib/geo.mjs';
 import { plainText } from './search-retrieval.mjs';
 
-const OVERPASS = 'https://overpass-api.de/api/interpreter';
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
 const TOPO = 'https://api.opentopodata.org/v1/srtm90m,aster30m';
 const WEATHER = 'https://archive-api.open-meteo.com/v1/archive';
 const userAgent = 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)';
@@ -65,6 +68,7 @@ async function jsonRequest(fetcher, url, options = {}) {
 
 export function createLocationContext({ fetcher = fetch, now = Date.now } = {}) {
   const cache = new Map();
+  const cooldowns = new Map();
   let lastStarted = -Infinity,
     running = 0,
     day = '',
@@ -85,7 +89,7 @@ export function createLocationContext({ fetcher = fetch, now = Date.now } = {}) 
       count = 0;
     }
     // Below public provider limits, including failed attempts. Resets on server restart.
-    if (running >= 2 || now() - lastStarted < 1500 || count >= 500) throw new ContextBusy();
+    if (running >= 1 || now() - lastStarted < 1500 || count >= 90) throw new ContextBusy();
     lastStarted = now();
     running++;
     count++;
@@ -126,14 +130,26 @@ export function createLocationContext({ fetcher = fetch, now = Date.now } = {}) 
       const points = terrainPoints(input, input.radius);
       await Promise.allSettled([
         (async () => {
-          const data = await jsonRequest(fetcher, OVERPASS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              data: `[out:json][timeout:15];(${selectors.join(';')};);out center 100;`,
-            }).toString(),
-          });
-          if (!Array.isArray(data.elements) || data.remark) throw new Error('Incomplete response');
+          let data, backend;
+          for (const endpoint of OVERPASS) {
+            if ((cooldowns.get(endpoint) || 0) > now()) continue;
+            const url = new URL(endpoint);
+            url.search = new URLSearchParams({
+              data: `[out:json][timeout:10];(${selectors.join(';')};);out center 100;`,
+            });
+            try {
+              const result = await jsonRequest(fetcher, url);
+              if (!Array.isArray(result.elements) || result.remark)
+                throw new Error('Incomplete response');
+              data = result;
+              backend = url.hostname;
+              break;
+            } catch {
+              // Do not retry a failed server. Try the other documented public instance once.
+              cooldowns.set(endpoint, now() + 5 * 60000);
+            }
+          }
+          if (!data) throw new Error('Unavailable');
           const seen = new Set();
           const items = data.elements
             .slice(0, 100)
@@ -191,7 +207,11 @@ export function createLocationContext({ fetcher = fetch, now = Date.now } = {}) 
             })
             .sort((a, b) => a.distanceMetres - b.distanceMetres)
             .slice(0, 20);
-          Object.assign(nearby, { status: 'available', items });
+          Object.assign(nearby, {
+            status: 'available',
+            items,
+            attribution: `© OpenStreetMap contributors · ODbL · ${backend}`,
+          });
         })(),
         (async () => {
           const url = new URL(TOPO);

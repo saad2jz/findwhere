@@ -236,15 +236,17 @@ directory entries open a landing page for manual input, rather than claiming a n
 Network failures show a useful fallback; manual coordinates and case notes still work.
 
 Location-context checks send only the selected coordinates, radius/category and optional date through the
-server to fixed Overpass, Open Topo Data and Open-Meteo endpoints. Photos and notes are not sent. Public
+server to fixed Overpass (main service or Private.coffee), Open Topo Data and Open-Meteo endpoints. Photos and notes are not sent. Public
 map coverage is incomplete; distances use geometry centers, not entrances or routes. Elevation is a raster
 estimate at approximately 30–90 m resolution, not building height or a reconstructed skyline. Historical weather
 is ERA5 reanalysis on an approximately 25 km grid and cannot establish conditions at the instant of a photo.
 Dates must be from 1940 through seven days ago. Open-Meteo's free endpoint is for **non-commercial use**.
 These checks need no API key or AI login; the app is intended for personal use. Shared public services may
 be unavailable. The server caches complete results for six hours and partial results for one minute, spaces
-new lookups by at least 1.5 seconds, allows two concurrent lookups and caps new lookups at 500 per UTC day.
-These in-memory limits reset on restart and are not distributed quotas. No automatic retries are made.
+new lookups by at least 1.5 seconds, allows one concurrent lookup and caps new lookups at 90 per UTC day.
+These in-memory limits reset on restart and are not distributed quotas. A failed Overpass instance enters
+a five-minute cooldown; the other documented public instance is tried at most once, without retrying the
+failed endpoint. Complete empty results do not trigger fallback. Other providers have no automatic retries.
 See [Overpass shared-service guidance](https://dev.overpass-api.de/overpass-doc/en/preface/commons.html),
 [Open Topo Data API and limits](https://www.opentopodata.org/api/),
 [Open-Meteo historical data](https://open-meteo.com/en/docs/historical-weather-api) and

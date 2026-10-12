@@ -12,10 +12,10 @@ const clock = Date.UTC(2026, 9, 12);
 function fixture(value, options) {
   const url = new URL(value);
   assert.equal(options.redirect, 'error');
-  if (url.hostname === 'overpass-api.de') {
+  if (['overpass-api.de', 'overpass.private.coffee'].includes(url.hostname)) {
     assert.equal(url.pathname, '/api/interpreter');
-    const query = new URLSearchParams(options.body).get('data');
-    assert.match(query, /\[timeout:15\]/);
+    const query = url.searchParams.get('data');
+    assert.match(query, /\[timeout:10\]/);
     assert.match(query, /out center 100/);
     return Response.json({
       elements: [
@@ -122,7 +122,11 @@ test('one unavailable provider retains other results, and no date sends no weath
     const result = await createLocationContext({
       now: () => clock,
       fetcher: async (url, options) =>
-        new URL(url).hostname === broken
+        (
+          broken === 'overpass-api.de'
+            ? new URL(url).hostname.startsWith('overpass')
+            : new URL(url).hostname === broken
+        )
           ? new Response('private upstream error', { status: 429 })
           : fixture(url, options),
     })(input);
@@ -156,6 +160,43 @@ test('one unavailable provider retains other results, and no date sends no weath
   })({ lat: input.lat, lng: input.lng, radius: 500, category: 'fuel' });
   assert.equal(result.weather.status, 'not-requested');
   assert.equal(calls.length, 2);
+});
+
+test('Overpass falls through once on failure, skips a cooling server and accepts an empty successful result', async () => {
+  const calls = [];
+  let time = clock;
+  const load = createLocationContext({
+    now: () => time,
+    fetcher: async (url, options) => {
+      const host = new URL(url).hostname;
+      calls.push(host);
+      if (host === 'overpass-api.de') return new Response('', { status: 429 });
+      return fixture(url, options);
+    },
+  });
+  const result = await load(input);
+  assert.equal(result.nearby.status, 'available');
+  assert.match(result.nearby.attribution, /overpass.private.coffee/);
+  assert.equal(calls.filter((host) => host.startsWith('overpass')).length, 2);
+  time += 2000;
+  await load({ ...input, category: 'fuel' });
+  assert.equal(calls.filter((host) => host === 'overpass-api.de').length, 1);
+  time += 5 * 60000;
+  await load({ ...input, category: 'landmarks' });
+  assert.equal(calls.filter((host) => host === 'overpass-api.de').length, 2);
+  const emptyCalls = [];
+  const empty = await createLocationContext({
+    now: () => clock,
+    fetcher: async (url, options) => {
+      emptyCalls.push(new URL(url).hostname);
+      return new URL(url).hostname === 'overpass-api.de'
+        ? Response.json({ elements: [] })
+        : fixture(url, options);
+    },
+  })(input);
+  assert.equal(empty.nearby.status, 'available');
+  assert.equal(empty.nearby.items.length, 0);
+  assert.ok(!emptyCalls.includes('overpass.private.coffee'));
 });
 
 test('invalid requests and future/recent dates never contact upstream providers; cache and request gate bound usage', async () => {

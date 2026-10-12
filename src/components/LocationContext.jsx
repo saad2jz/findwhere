@@ -102,9 +102,9 @@ export default function LocationContext({ candidate, onSave, onAdd, canAdd }) {
           />
         </label>
         <p className="context-disclosure">
-          Sends this candidate’s coordinates to Overpass / OpenStreetMap and Open Topo Data. Adding
-          a date also sends the coordinates and that date to Open-Meteo. Your photo and notes stay
-          here.
+          Sends this candidate’s coordinates to Overpass (main service or Private.coffee) and Open
+          Topo Data. Adding a date also sends the coordinates and that date to Open-Meteo. Your
+          photo and notes stay here.
         </p>
         <button className="button secondary" type="submit" disabled={busy}>
           {busy ? (
@@ -119,7 +119,7 @@ export default function LocationContext({ candidate, onSave, onAdd, canAdd }) {
               : 'Load location context'}
         </button>
         {busy && (
-          <p role="status">Retrieving available public data. This can take about 20 seconds.</p>
+          <p role="status">Retrieving available public data. This can take up to 40 seconds.</p>
         )}
         {error && (
           <p className="context-error" role="alert">
