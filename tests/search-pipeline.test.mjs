@@ -6,7 +6,11 @@ import {
   resolveSearchPlace,
   rankSearchChecks,
 } from '../server/search-pipeline.mjs';
-import { createDocumentSearch, downloadReference } from '../server/search-retrieval.mjs';
+import {
+  createDocumentSearch,
+  downloadReference,
+  isRelevantSearchRecord,
+} from '../server/search-retrieval.mjs';
 import { analyzeGemini } from '../server/gemini.mjs';
 import { createDailyQuota } from '../server/security.mjs';
 import { createApp } from '../server/app.mjs';
@@ -333,6 +337,87 @@ test('document retrieval uses fixed authenticated destinations, encodes query da
     assert.equal(result.length, 1);
     assert.doesNotMatch(result[0].text, /<span|<b>/);
   }
+});
+
+test('document relevance requires exact query names and does not confuse a brand with a stemmed word', () => {
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'Attacks on civilians', text: 'Shelling damaged residential apartment buildings.' },
+      'Shell station with white and red apartment blocks',
+    ),
+    false,
+  );
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'Gas Works Park', text: 'A former gas plant with residential buildings nearby.' },
+      'Shell gas station urban shop residential buildings background',
+    ),
+    false,
+  );
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'Shell station', text: 'A public fuel station next to apartment blocks.' },
+      'Shell station with white and red apartment blocks',
+    ),
+    true,
+  );
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'Harbor Gallery', text: 'A gallery in Seaton.' },
+      '"Harbor Museum" tower',
+    ),
+    false,
+  );
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'Château de Sceaux', text: 'A public country house.' },
+      '"Chateau de Sceaux" facade',
+    ),
+    true,
+  );
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'Octagonal tower', text: 'A stone arch beside the tower.' },
+      'octagonal tower arch',
+    ),
+    true,
+  );
+  assert.equal(
+    isRelevantSearchRecord(
+      { title: 'The red dog', text: 'A white dog.' },
+      'gas station red white apartments',
+    ),
+    false,
+  );
+});
+
+test('unrelated retrieval is excluded before selection, with counts preserved and no extra AI request', async () => {
+  let calls = 0;
+  const result = await runSearchPipeline(
+    options({
+      callAI: async () => {
+        calls++;
+        return {
+          ...scene,
+          searchPlan: { queries: ['Shell station apartments'], placeQueries: [] },
+        };
+      },
+      searchPlaces: async () => [],
+      searchReferences: async () => [],
+      searchDocuments: async () => [
+        {
+          ...doc,
+          title: 'Gas Works Park',
+          text: 'A historic gas plant near residential buildings.',
+        },
+      ],
+    }),
+  );
+  assert.equal(calls, 1);
+  assert.equal(result.pipeline.discardedSources, 1);
+  assert.deepEqual(result.pipeline.sources, []);
+  assert.deepEqual(result.candidates, []);
+  assert.ok(result.pipeline.warnings.some((warning) => warning.includes('exact query names')));
 });
 
 test('reference downloads reject arbitrary hosts, redirects, oversized streams and MIME spoofing', async () => {

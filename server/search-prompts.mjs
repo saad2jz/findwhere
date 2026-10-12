@@ -22,7 +22,7 @@ export const pipelineSceneJsonSchema = {
   },
 };
 export const planningInstructions = `\nFindwhere will run a search after this scene read. Also return searchPlan:
-queries: up to 3 concise text queries for public web pages and Wikimedia reference photographs. Use readable signage, brand, distinctive permanent geometry and any defensible region. Vary concrete combinations; do not repeat long observation sentences. Prefer uncommon identifying details over famous landmarks. User hints remain unverified. Do not include speculative street addresses or coordinates.
+queries: up to 3 concise text queries for public web pages and Wikimedia reference photographs. Use 2–6 informative keywords per query, starting with the exact readable name or brand when available. Put readable multiword names in double quotes; do not quote inferred descriptions. Avoid filler words like image, photo, urban, background and with. Use readable signage, brand, distinctive permanent geometry and any defensible region. Vary concrete combinations; do not repeat long observation sentences. Prefer uncommon identifying details over famous landmarks. User hints remain unverified. Do not include speculative street addresses or coordinates.
 placeQueries: up to 3 individually named PUBLIC places worth looking up in OpenStreetMap, with city/region/country where defensible. This is not an identification: a cautiously inferred public place is allowed as a search hypothesis. Avoid unbounded searches for every branch of a chain, residential addresses, coordinate grids, or a global brand name without a geographic qualifier. Leave empty if no sufficiently specific name/area can be inferred. No search has happened yet. Never claim that it has.`;
 
 const proposal = z.object({

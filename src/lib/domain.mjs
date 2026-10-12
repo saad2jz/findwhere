@@ -351,6 +351,7 @@ export function exportReport(investigation, { originId } = {}) {
         `Run: ${pipeline.startedAt} — ${pipeline.completedAt}`,
         `Engines: ${pipeline.engines.map(md).join('; ')}`,
         `AI requests attempted: ${pipeline.requestsUsed}`,
+        `Unrelated document results excluded: ${pipeline.discardedSources}`,
         `User context supplied: ${pipeline.contextUsed}; investigator correction supplied: ${pipeline.correctionUsed}`,
         'Ranking reflects evidence checks, not measured accuracy. Text searches are not reverse-image matches.',
         '',

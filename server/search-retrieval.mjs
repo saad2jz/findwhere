@@ -8,6 +8,53 @@ export const plainText = (value, max = 2400) =>
     .trim()
     .slice(0, max);
 const userAgent = 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)';
+const words = (value) =>
+  plainText(value)
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+const stopWords = new Set([
+  'the',
+  'and',
+  'with',
+  'near',
+  'from',
+  'this',
+  'that',
+  'for',
+  'background',
+  'photo',
+  'image',
+  'view',
+]);
+
+// Search-engine stemming can turn a visible brand into an unrelated word (e.g. shelling).
+// An exact quoted name or leading proper noun must occur in the returned title/snippet.
+// This checks text relevance only; it cannot establish a photographic or geographic match.
+export function isRelevantSearchRecord(record, query) {
+  const text = ` ${words(`${record.title} ${record.text || ''}`)} `;
+  const quoted = [...query.matchAll(/"([^"\n]{2,100})"/g)]
+    .map((match) => words(match[1]))
+    .filter(Boolean);
+  if (quoted.length) return quoted.every((phrase) => text.includes(` ${phrase} `));
+  const leadingName = query.match(/^\s*([\p{Lu}][\p{L}\p{N}-]{2,})/u)?.[1];
+  if (leadingName && !stopWords.has(words(leadingName)))
+    return text.includes(` ${words(leadingName)} `);
+  const terms = [
+    ...new Set(
+      words(query)
+        .split(' ')
+        .filter((term) => term.length > 2 && !stopWords.has(term)),
+    ),
+  ];
+  return (
+    terms.length > 0 &&
+    text.includes(` ${terms[0]} `) &&
+    terms.filter((term) => text.includes(` ${term} `)).length >= Math.min(2, terms.length)
+  );
+}
 export function safeSourceUrl(value) {
   try {
     const url = new URL(value);

@@ -5,7 +5,7 @@ import { assessComparison } from '../src/lib/image-research.mjs';
 import { distanceAndBearing } from '../src/lib/geo.mjs';
 import { assessAnalysis, sceneContext } from './analysis-quality.mjs';
 import { searchPlanSchema, proposalSchema } from './search-prompts.mjs';
-import { downloadReference } from './search-retrieval.mjs';
+import { downloadReference, isRelevantSearchRecord } from './search-retrieval.mjs';
 
 const words = (value) =>
   String(value || '')
@@ -136,6 +136,7 @@ export async function runSearchPipeline({
     warnings = [];
   const engine = broadSearch ? 'Brave Search' : 'Wikipedia';
   let requestsUsed = 0;
+  let discardedSources = 0;
   let scene;
   const progress = (stage, detail) => {
     signal?.throwIfAborted();
@@ -190,6 +191,7 @@ export async function runSearchPipeline({
       completedAt: new Date().toISOString(),
       engines: [engine, 'OpenStreetMap', 'Wikimedia Commons'],
       requestsUsed,
+      discardedSources,
       contextUsed: Boolean(input.context.trim()),
       correctionUsed: Boolean(input.feedback),
       queries,
@@ -251,7 +253,10 @@ export async function runSearchPipeline({
   for (const query of [...new Set(plan.queries)]) {
     progress('retrieve', `Searching: ${query}`);
     const docs = await search(engine, query, () => searchDocuments(query, signal));
-    for (const record of docs) addSource(record);
+    for (const record of docs) {
+      if (isRelevantSearchRecord(record, query)) addSource(record);
+      else discardedSources++;
+    }
     const photos = await search('Wikimedia Commons', query, () =>
       searchReferences(query, { waitForSlot: true, signal }),
     );
@@ -268,6 +273,10 @@ export async function runSearchPipeline({
   }
   progress('locate', 'Selecting source-backed hypotheses and resolving their map records.');
   if (!sources.length) {
+    if (discardedSources)
+      warnings.push(
+        'Retrieved documents did not contain the exact query names or enough relevant terms. They were excluded before candidate selection.',
+      );
     warnings.push(
       'No records were retrieved. Try readable signage, a wider photo or a country/region hint.',
     );

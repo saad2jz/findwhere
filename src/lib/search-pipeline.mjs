@@ -41,6 +41,7 @@ export const pipelineSchema = z.object({
   completedAt: z.iso.datetime(),
   engines: z.array(z.string().max(80)).max(4),
   requestsUsed: z.number().int().min(0).max(4),
+  discardedSources: z.number().int().min(0).max(100).default(0),
   contextUsed: z.boolean(),
   correctionUsed: z.boolean(),
   queries: z.array(z.object({ service: z.string().max(80), query: z.string().max(200) })).max(20),

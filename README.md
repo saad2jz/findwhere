@@ -29,6 +29,10 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   This is automated text/POI retrieval and reference comparison, **not a reverse-image index**, and does
   not promise GeoSeeer-level recall, exact camera coordinates, or calibrated accuracy. Ordinary businesses
   and less documented scenes need broader source coverage and can still yield no specific hypothesis.
+  Document relevance checks require exact quoted names or a leading query name when present, avoiding
+  stemmed-word matches such as a station brand being confused with an unrelated article about shelling.
+  Excluded results are counted in the evidence trail and report; if no usable records remain, the server
+  skips candidate selection rather than spending another AI request on unrelated evidence.
   [Brave API](https://api-dashboard.search.brave.com/documentation/quickstart),
   [MediaWiki search](https://www.mediawiki.org/wiki/API:Search),
   [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/).

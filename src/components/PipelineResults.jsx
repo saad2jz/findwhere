@@ -58,6 +58,12 @@ export default function PipelineResults({ pipeline }) {
           ? `Context-assisted run${pipeline.correctionUsed ? '; your correction was included' : ''}.`
           : 'Photo-only run. Saved map candidates, notes and corrections were not supplied.'}
       </p>
+      {pipeline.discardedSources > 0 && (
+        <p>
+          {pipeline.discardedSources} unrelated document result
+          {pipeline.discardedSources === 1 ? '' : 's'} excluded before candidate selection.
+        </p>
+      )}
       {pipeline.warnings.map((warning, index) => (
         <p className="pipeline-warning" key={index}>
           {warning}

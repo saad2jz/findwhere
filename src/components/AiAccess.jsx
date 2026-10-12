@@ -52,8 +52,8 @@ export default function AiAccess({ health, onRefresh }) {
               <b>
                 {health.dailyRemaining} of {health.dailyLimit}
               </b>{' '}
-              analyses remaining on this server today. Resets at 00:00 UTC. Failed provider requests
-              count too.
+              AI requests remaining on this server today. A Findwhere search can use up to four.
+              Resets at 00:00 UTC. Failed provider requests count too.
             </p>
           )}
           <p className="subtle">
