@@ -10,6 +10,31 @@ const TOPO = 'https://api.opentopodata.org/v1/srtm90m,aster30m';
 const WEATHER = 'https://archive-api.open-meteo.com/v1/archive';
 const userAgent = 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)';
 export class ContextBusy extends Error {}
+class ProviderFailure extends Error {
+  constructor(reason) {
+    super('Public data provider unavailable');
+    this.reason = reason;
+  }
+}
+function failureReason(error) {
+  if (error instanceof ProviderFailure) return error.reason;
+  if (['TimeoutError', 'AbortError'].includes(error?.name)) return 'TIMEOUT';
+  const code = error?.cause?.code || error?.code;
+  return [
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'ETIMEDOUT',
+    'ECONNREFUSED',
+    'ECONNRESET',
+    'UND_ERR_CONNECT_TIMEOUT',
+    'UND_ERR_SOCKET',
+    'CERT_HAS_EXPIRED',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'ERR_TLS_CERT_ALTNAME_INVALID',
+  ].includes(code)
+    ? code
+    : 'INVALID_OR_UNAVAILABLE_DATA';
+}
 
 // Great-circle destinations remain valid at poles and across the date line.
 export function terrainPoints(point, metres) {
@@ -47,8 +72,9 @@ async function jsonRequest(fetcher, url, options = {}) {
     headers: { 'User-Agent': userAgent, ...options.headers },
     signal: AbortSignal.timeout(18000),
   });
-  if (!response.ok || Number(response.headers.get('content-length')) > 1_000_000)
-    throw new Error('Unavailable');
+  if (!response.ok) throw new ProviderFailure(`HTTP_${response.status}`);
+  if (Number(response.headers.get('content-length')) > 1_000_000)
+    throw new ProviderFailure('RESPONSE_TOO_LARGE');
   const reader = response.body.getReader();
   const chunks = [];
   let size = 0;
@@ -57,7 +83,7 @@ async function jsonRequest(fetcher, url, options = {}) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.length;
-      if (size > 1_000_000) throw new Error('Unavailable');
+      if (size > 1_000_000) throw new ProviderFailure('RESPONSE_TOO_LARGE');
       chunks.push(value);
     }
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -66,7 +92,11 @@ async function jsonRequest(fetcher, url, options = {}) {
   }
 }
 
-export function createLocationContext({ fetcher = fetch, now = Date.now } = {}) {
+export function createLocationContext({
+  fetcher = fetch,
+  now = Date.now,
+  onUnavailable = () => {},
+} = {}) {
   const cache = new Map();
   const cooldowns = new Map();
   let lastStarted = -Infinity,
@@ -140,11 +170,19 @@ export function createLocationContext({ fetcher = fetch, now = Date.now } = {}) 
             try {
               const result = await jsonRequest(fetcher, url);
               if (!Array.isArray(result.elements) || result.remark)
-                throw new Error('Incomplete response');
+                throw new ProviderFailure('QUERY_INCOMPLETE');
               data = result;
               backend = url.hostname;
               break;
-            } catch {
+            } catch (error) {
+              // Fixed host and allowlisted reason only; never log queries, coordinates or bodies.
+              try {
+                onUnavailable({
+                  provider: 'overpass',
+                  host: url.hostname,
+                  reason: failureReason(error),
+                });
+              } catch {}
               // Do not retry a failed server. Try the other documented public instance once.
               cooldowns.set(endpoint, now() + 5 * 60000);
             }

@@ -108,7 +108,13 @@ export function createApp({
       process.env.GEOCODER_USER_AGENT || 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)',
   });
   const searchReferences = createReferenceSearch({ fetcher, now });
-  const locationContext = createLocationContext({ fetcher, now });
+  const locationContext = createLocationContext({
+    fetcher,
+    now,
+    onUnavailable: (event) => {
+      if (production) console.warn('[location-context]', JSON.stringify(event));
+    },
+  });
   const waterfall = createSearchWaterfall({
     fetcher,
     now,
@@ -226,20 +232,16 @@ export function createApp({
   app.post('/api/location-context', async (req, res) => {
     const input = contextRequestSchema.safeParse(req.body);
     if (!input.success)
-      return res
-        .status(400)
-        .json({
-          error: 'Use valid coordinates, a 500–2,000 m radius, and an optional historical date.',
-        });
+      return res.status(400).json({
+        error: 'Use valid coordinates, a 500–2,000 m radius, and an optional historical date.',
+      });
     try {
       res.json(await locationContext(input.data));
     } catch (error) {
       if (error instanceof ContextBusy)
-        return res
-          .status(429)
-          .json({
-            error: 'Location checks are busy or the daily limit is reached. Try again later.',
-          });
+        return res.status(429).json({
+          error: 'Location checks are busy or the daily limit is reached. Try again later.',
+        });
       if (error instanceof RangeError)
         return res.status(400).json({ error: 'Choose a date from 1940 through seven days ago.' });
       res

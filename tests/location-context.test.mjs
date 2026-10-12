@@ -199,6 +199,43 @@ test('Overpass falls through once on failure, skips a cooling server and accepts
   assert.ok(!emptyCalls.includes('overpass.private.coffee'));
 });
 
+test('provider diagnostics classify failures without exposing coordinates, queries or upstream text', async () => {
+  for (const [failure, reason] of [
+    [() => new Response('secret response body', { status: 429 }), 'HTTP_429'],
+    [
+      () => {
+        throw Object.assign(new Error('secret query'), { name: 'TimeoutError' });
+      },
+      'TIMEOUT',
+    ],
+    [
+      () => {
+        throw new TypeError('secret URL', { cause: { code: 'EAI_AGAIN' } });
+      },
+      'EAI_AGAIN',
+    ],
+    [() => Response.json({ elements: [], remark: 'secret query' }), 'QUERY_INCOMPLETE'],
+  ]) {
+    const events = [];
+    const result = await createLocationContext({
+      now: () => clock,
+      onUnavailable: (event) => events.push(event),
+      fetcher: async (url, options) =>
+        new URL(url).hostname.startsWith('overpass') ? failure() : fixture(url, options),
+    })(input);
+    assert.equal(result.nearby.status, 'unavailable');
+    assert.deepEqual(
+      events,
+      ['overpass-api.de', 'overpass.private.coffee'].map((host) => ({
+        provider: 'overpass',
+        host,
+        reason,
+      })),
+    );
+    assert.doesNotMatch(JSON.stringify(events), /secret|38\.71217|-9\.133801|timeout:10/);
+  }
+});
+
 test('invalid requests and future/recent dates never contact upstream providers; cache and request gate bound usage', async () => {
   let now = clock,
     calls = 0;
