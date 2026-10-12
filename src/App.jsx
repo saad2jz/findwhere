@@ -1878,6 +1878,25 @@ export default function App() {
               </p>
             </>
           )}
+          <h3>Search waterfall</h3>
+          <p>Wikipedia → Tavily → Exa → SerpApi → optional Brave.</p>
+          <p>
+            <strong>Configured:</strong> {(health.searchProviders || ['Wikipedia']).join(', ')}.
+            Missing keys, exhausted limits and unavailable providers are skipped.
+          </p>
+          <p>
+            <strong>Reverse-image search:</strong>{' '}
+            {health.reverseImageEnabled
+              ? 'Google Lens via SerpApi is available with your photo-upload consent.'
+              : 'Not configured. Add SERPAPI_API_KEY on the server to enable Google Lens.'}
+          </p>
+          {!health.broadSearchEnabled && (
+            <p>
+              App owner: add <code>TAVILY_API_KEY</code>, <code>EXA_API_KEY</code> or{' '}
+              <code>SERPAPI_API_KEY</code> in Render, then redeploy. One key is enough; adding all
+              three enables every free-tier fallback. Select free plans with paid billing disabled.
+            </p>
+          )}
           <h3>External services</h3>
           <p>
             Maps request tiles from OpenStreetMap or Esri. Place searches are sent to the configured
