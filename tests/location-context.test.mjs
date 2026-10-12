@@ -9,11 +9,15 @@ import { distanceAndBearing } from '../src/lib/geo.mjs';
 
 const input = { lat: 38.71217, lng: -9.133801, radius: 1000, category: 'all', date: '2020-06-01' };
 const clock = Date.UTC(2026, 9, 12);
+const overpassHosts = ['overpass-api.de', 'overpass.private.coffee', 'maps.mail.ru'];
 function fixture(value, options) {
   const url = new URL(value);
   assert.equal(options.redirect, 'error');
-  if (['overpass-api.de', 'overpass.private.coffee'].includes(url.hostname)) {
-    assert.equal(url.pathname, '/api/interpreter');
+  if (overpassHosts.includes(url.hostname)) {
+    assert.equal(
+      url.pathname,
+      url.hostname === 'maps.mail.ru' ? '/osm/tools/overpass/api/interpreter' : '/api/interpreter',
+    );
     const query = url.searchParams.get('data');
     assert.match(query, /\[timeout:10\]/);
     assert.match(query, /out center 100/);
@@ -124,7 +128,7 @@ test('one unavailable provider retains other results, and no date sends no weath
       fetcher: async (url, options) =>
         (
           broken === 'overpass-api.de'
-            ? new URL(url).hostname.startsWith('overpass')
+            ? overpassHosts.includes(new URL(url).hostname)
             : new URL(url).hostname === broken
         )
           ? new Response('private upstream error', { status: 429 })
@@ -197,6 +201,23 @@ test('Overpass falls through once on failure, skips a cooling server and accepts
   assert.equal(empty.nearby.status, 'available');
   assert.equal(empty.nearby.items.length, 0);
   assert.ok(!emptyCalls.includes('overpass.private.coffee'));
+  assert.ok(!emptyCalls.includes('maps.mail.ru'));
+});
+
+test('the last public instance is tried once and its provenance is preserved when earlier instances fail', async () => {
+  const calls = [];
+  const result = await createLocationContext({
+    now: () => clock,
+    fetcher: async (url, options) => {
+      const host = new URL(url).hostname;
+      if (overpassHosts.includes(host)) calls.push(host);
+      if (overpassHosts.slice(0, 2).includes(host)) return new Response('', { status: 503 });
+      return fixture(url, options);
+    },
+  })(input);
+  assert.deepEqual(calls, overpassHosts);
+  assert.equal(result.nearby.status, 'available');
+  assert.match(result.nearby.attribution, /maps.mail.ru/);
 });
 
 test('provider diagnostics classify failures without exposing coordinates, queries or upstream text', async () => {
@@ -221,12 +242,12 @@ test('provider diagnostics classify failures without exposing coordinates, queri
       now: () => clock,
       onUnavailable: (event) => events.push(event),
       fetcher: async (url, options) =>
-        new URL(url).hostname.startsWith('overpass') ? failure() : fixture(url, options),
+        overpassHosts.includes(new URL(url).hostname) ? failure() : fixture(url, options),
     })(input);
     assert.equal(result.nearby.status, 'unavailable');
     assert.deepEqual(
       events,
-      ['overpass-api.de', 'overpass.private.coffee'].map((host) => ({
+      overpassHosts.map((host) => ({
         provider: 'overpass',
         host,
         reason,

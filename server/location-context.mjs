@@ -5,6 +5,7 @@ import { plainText } from './search-retrieval.mjs';
 const OVERPASS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
 const TOPO = 'https://api.opentopodata.org/v1/srtm90m,aster30m';
 const WEATHER = 'https://archive-api.open-meteo.com/v1/archive';
@@ -183,7 +184,7 @@ export function createLocationContext({
                   reason: failureReason(error),
                 });
               } catch {}
-              // Do not retry a failed server. Try the other documented public instance once.
+              // Do not retry a failed server. Each remaining documented instance gets one attempt.
               cooldowns.set(endpoint, now() + 5 * 60000);
             }
           }
