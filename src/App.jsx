@@ -1709,8 +1709,9 @@ export default function App() {
                 Wikipedia → Tavily → Exa → SerpApi → optional Brave.
               </p>
               <p>
-                Missing keys and request limits are skipped. Stops after two relevant source URLs
-                per query; this does not confirm the place.
+                Missing keys and request limits are skipped. Starts with two relevant source URLs
+                per query, then tries remaining providers if no mapped hypothesis is found. Sources
+                do not confirm the place.
               </p>
               <label className="analysis-checkbox">
                 <input

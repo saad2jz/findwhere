@@ -73,8 +73,9 @@ export default function PipelineResults({ pipeline }) {
         <details>
           <summary>Search waterfall · {pipeline.attempts.length} steps</summary>
           <p>
-            Continues until two relevant source URLs are found for a query. This threshold does not
-            confirm a location.
+            Starts with two relevant source URLs per query. If these establish no mapped hypothesis,
+            the search continues through remaining providers within the same request limit. Sources
+            do not confirm a location.
           </p>
           <ol>
             {pipeline.attempts.map((attempt, index) => (

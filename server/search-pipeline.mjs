@@ -325,8 +325,7 @@ export async function runSearchPipeline({
     progress('rank', 'Keeping visible clues and search details; no sourced place was found.');
     return finish();
   }
-  let proposals;
-  try {
+  const select = async () => {
     const selected = await ai({
       image: input.image,
       mode: 'selection',
@@ -336,7 +335,11 @@ export async function runSearchPipeline({
         records: sources,
       }),
     });
-    proposals = selectSupportedProposals(selected, sources, scene.clues, input.feedback);
+    return selectSupportedProposals(selected, sources, scene.clues, input.feedback);
+  };
+  let proposals;
+  try {
+    proposals = await select();
   } catch {
     signal?.throwIfAborted();
     warnings.push(
@@ -345,46 +348,83 @@ export async function runSearchPipeline({
     progress('rank', 'Preserving the retrieved evidence.');
     return finish();
   }
-  for (const proposal of proposals) {
-    const records =
-      places.get(proposal.query) ||
-      (await search('OpenStreetMap', proposal.query, () =>
-        searchPlaces(proposal.query, { waitForSlot: true, signal }),
-      ));
-    const point = resolveSearchPlace(proposal, records);
-    const mapSource =
-      point &&
-      addSource({
-        kind: 'place',
-        title: point.mapReference.label,
-        text: proposal.country,
-        url: point.mapReference.url,
+  const resolve = async (proposals) => {
+    for (const proposal of proposals) {
+      if (
+        checks.some(
+          (check) =>
+            words(check.referenceQuery) ===
+            words(`${proposal.name} ${proposal.street} ${proposal.city} ${proposal.country}`),
+        )
+      )
+        continue;
+      const records =
+        places.get(proposal.query) ||
+        (await search('OpenStreetMap', proposal.query, () =>
+          searchPlaces(proposal.query, { waitForSlot: true, signal }),
+        ));
+      const point = resolveSearchPlace(proposal, records);
+      const mapSource =
+        point &&
+        addSource({
+          kind: 'place',
+          title: point.mapReference.label,
+          text: proposal.country,
+          url: point.mapReference.url,
+        });
+      checks.push({
+        id: randomUUID(),
+        name: proposal.name,
+        country: proposal.country,
+        reason: proposal.reason,
+        uncertainty: proposal.uncertainty,
+        sourceIds: [
+          ...new Set([...proposal.sourceIds, ...(mapSource ? [mapSource.id] : [])]),
+        ].slice(0, 8),
+        features: proposal.features,
+        status: point ? 'mapped' : 'unresolved',
+        referenceStatus: 'unavailable',
+        point,
+        referenceIds: proposal.referenceIds,
+        referenceQuery: `${proposal.name} ${proposal.street} ${proposal.city} ${proposal.country}`
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 200),
       });
-    checks.push({
-      id: randomUUID(),
-      name: proposal.name,
-      country: proposal.country,
-      reason: proposal.reason,
-      uncertainty: proposal.uncertainty,
-      sourceIds: [...new Set([...proposal.sourceIds, ...(mapSource ? [mapSource.id] : [])])].slice(
-        0,
-        8,
-      ),
-      features: proposal.features,
-      status: point ? 'mapped' : 'unresolved',
-      referenceStatus: 'unavailable',
-      point,
-      referenceIds: proposal.referenceIds,
-      referenceQuery: `${proposal.name} ${proposal.street} ${proposal.city} ${proposal.country}`
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 200),
-    });
+    }
+  };
+  await resolve(proposals);
+  if (documentSearch && !checks.some((check) => check.status === 'mapped')) {
+    const remaining = [...new Set(plan.queries)].filter((query) => documentSearch.hasMore(query));
+    if (remaining.length) {
+      progress(
+        'retrieve',
+        'No mapped hypothesis yet. Continuing with the remaining search providers.',
+      );
+      const previousCount = sources.length;
+      for (const query of remaining) {
+        const records = await documentSearch.search(query, { continueSearch: true });
+        for (const record of records) addSource(record);
+      }
+      if (sources.length > previousCount) {
+        progress('locate', 'Checking the additional sources for a specific mapped place.');
+        try {
+          await resolve(await select());
+        } catch {
+          signal?.throwIfAborted();
+          warnings.push(
+            'Additional candidate selection could not finish. Earlier evidence was retained.',
+          );
+        }
+      }
+    }
   }
+  // Keep the existing three-place bound, prioritizing newly resolved map records.
+  checks.splice(0, checks.length, ...rankSearchChecks(checks).slice(0, 3));
   progress('compare', 'Looking for reference photos of the proposed places.');
   let comparisons = 0;
   for (const check of checks) {
-    if (comparisons >= 2) {
+    if (comparisons >= 2 || requestsUsed >= 4) {
       check.referenceStatus = 'skipped';
       continue;
     }

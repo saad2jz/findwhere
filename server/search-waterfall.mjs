@@ -176,6 +176,7 @@ export function createSearchWaterfall({
     createRun({ signal, onAttempt = () => {}, onProgress = () => {} } = {}) {
       let used = 0;
       const failed = new Set();
+      const nextProvider = new Map();
       const emit = (provider, query, status, count = 0, discarded = 0) =>
         onAttempt({
           service: provider === 'lens' ? 'Google Lens via SerpApi' : searchLabels[provider],
@@ -193,9 +194,27 @@ export function createSearchWaterfall({
         return null;
       };
       return {
-        async search(query) {
+        hasMore(query) {
+          return (
+            used < 8 &&
+            order
+              .slice(nextProvider.get(query) ?? order.length)
+              .some(
+                (provider) =>
+                  provider !== 'wikipedia' &&
+                  keys[provider] &&
+                  limits[provider] > 0 &&
+                  !failed.has(provider) &&
+                  (cooldowns.get(provider) || 0) <= now(),
+              )
+          );
+        },
+        async search(query, { continueSearch = false } = {}) {
           const found = new Map();
-          for (const provider of order) {
+          const start = continueSearch ? (nextProvider.get(query) ?? order.length) : 0;
+          for (let index = start; index < order.length; index++) {
+            const provider = order[index];
+            nextProvider.set(query, index + 1);
             signal?.throwIfAborted();
             if (provider !== 'wikipedia' && !keys[provider]) {
               emit(provider, query, 'missing_key');
@@ -259,7 +278,7 @@ export function createSearchWaterfall({
               hits.length - relevant.length,
             );
             // Two relevant distinct URLs are a retrieval threshold, not independent confirmation.
-            if (found.size >= 2) break;
+            if (!continueSearch && found.size >= 2) break;
           }
           return [...found.values()].slice(0, 10);
         },

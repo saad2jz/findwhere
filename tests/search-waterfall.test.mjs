@@ -140,6 +140,127 @@ test('cached text searches consume no extra provider allowance', async () => {
   assert.ok(attempts.every((a) => a.status === 'cached'));
 });
 
+test('an unsuccessful location check can resume only remaining providers without the initial URL stop', async () => {
+  const hosts = [];
+  const run = createSearchWaterfall({
+    keys,
+    limits,
+    reserve: async () => true,
+    fetcher: async (value) => {
+      const host = new URL(value).hostname;
+      hosts.push(host);
+      if (host === 'en.wikipedia.org') return wiki();
+      const hits = [hit(`${host}/one`), hit(`${host}/two`)];
+      return Response.json({
+        results: hits,
+        organic_results: hits,
+        web: {
+          results: hits.map((h) => ({ ...h, description: h.content })),
+        },
+      });
+    },
+  }).createRun();
+  assert.equal(run.hasMore('Harbor Museum'), false);
+  await run.search('Harbor Museum');
+  assert.equal(run.hasMore('Harbor Museum'), true);
+  const extra = await run.search('Harbor Museum', { continueSearch: true });
+  assert.deepEqual(hosts, [
+    'en.wikipedia.org',
+    'api.tavily.com',
+    'api.exa.ai',
+    'serpapi.com',
+    'api.search.brave.com',
+  ]);
+  assert.equal(extra.length, 6);
+  assert.equal(run.hasMore('Harbor Museum'), false);
+  assert.deepEqual(await run.search('Harbor Museum', { continueSearch: true }), []);
+  assert.equal(hosts.length, 5);
+});
+
+test('pipeline resumes after no mapped hypothesis, but avoids extra selection for duplicate-only sources', async () => {
+  for (const outcome of ['new-place', 'duplicates', 'already-mapped', 'selection-error']) {
+    const hosts = [],
+      modes = [];
+    const waterfall = createSearchWaterfall({
+      keys: { tavily: keys.tavily, exa: keys.exa, serpapi: keys.serpapi },
+      limits,
+      reserve: async () => true,
+      fetcher: async (value) => {
+        const host = new URL(value).hostname;
+        hosts.push(host);
+        if (host === 'en.wikipedia.org') return wiki();
+        const items =
+          host === 'api.tavily.com' || outcome === 'duplicates'
+            ? [hit('one'), hit('two')]
+            : [hit(`${host}/new-place`)];
+        return Response.json({ results: items, organic_results: items });
+      },
+    });
+    const result = await runSearchPipeline({
+      input: { image: 'data:image/jpeg;base64,/9j/AA==', context: '' },
+      waterfall,
+      broadSearch: true,
+      reserve: async () => true,
+      searchPlaces: async () => [
+        {
+          name: 'Harbor Museum, Seaton, United Kingdom',
+          country: 'United Kingdom',
+          city: 'Seaton',
+          street: '',
+          category: 'tourism',
+          lat: 50.1,
+          lng: -3.2,
+          osmUrl: 'https://www.openstreetmap.org/way/123',
+        },
+      ],
+      searchReferences: async () => [],
+      callAI: async (request) => {
+        modes.push(request.mode);
+        if (request.mode === 'pipeline')
+          return {
+            summary: 'Synthetic test, not a real identification.',
+            clues: [
+              { category: 'Sign', text: 'Harbor Museum sign' },
+              { category: 'Building', text: 'Octagonal tower' },
+            ],
+            candidates: [],
+            nextSteps: [],
+            searchPlan: { queries: ['Harbor Museum tower'], placeQueries: [] },
+          };
+        if (outcome === 'selection-error') throw new Error('private error');
+        if (outcome !== 'already-mapped' && modes.length === 2) return { candidates: [] };
+        const records = JSON.parse(request.context).records;
+        return {
+          candidates: [
+            {
+              name: 'Harbor Museum',
+              country: 'United Kingdom',
+              city: 'Seaton',
+              street: '',
+              query: 'Harbor Museum Seaton United Kingdom',
+              reason: 'Sign and octagonal tower.',
+              uncertainty: 'Unverified photo identity.',
+              sourceIds: [records.at(-1).id],
+              supportingClueIndexes: [0, 1],
+              referenceIds: [],
+            },
+          ],
+        };
+      },
+    });
+    const resumed = ['new-place', 'duplicates'].includes(outcome);
+    assert.equal(hosts.includes('api.exa.ai'), resumed);
+    assert.equal(hosts.includes('serpapi.com'), resumed);
+    assert.equal(modes.length, outcome === 'new-place' ? 3 : 2);
+    assert.equal(
+      result.candidates.length,
+      ['new-place', 'already-mapped'].includes(outcome) ? 1 : 0,
+    );
+    if (outcome === 'new-place') assert.equal(result.candidates[0].lat, 50.1);
+    assert.doesNotMatch(JSON.stringify(result), /private error/);
+  }
+});
+
 test('SerpApi and Brave use fixed endpoints, safely encode queries and do not expose request secrets in evidence', async () => {
   const attempts = [],
     hosts = [];

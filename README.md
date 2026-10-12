@@ -21,7 +21,10 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   optional context and selected investigator corrections are explicitly labelled.
   Text retrieval follows **Wikipedia → Tavily → Exa → SerpApi → optional Brave** for each query.
   Missing keys, exhausted allowances, errors and irrelevant results fall through. Useful records are retained
-  across steps; two relevant distinct source URLs stop that query's chain. This is a retrieval threshold,
+  across steps; two relevant distinct source URLs pause that query's chain for candidate selection.
+  If no mapped hypothesis is found, remaining providers are searched once within the same eight-request
+  budget. New records get one additional selection pass, leaving at most one AI reference comparison
+  in that run. Duplicate-only results do not trigger another AI request. The retrieval threshold is
   not independent confirmation of a place. Without extra keys, Wikipedia, OpenStreetMap and Commons work.
   Missing sources, ambiguous branches and unavailable images remain unresolved rather
   than becoming invented coordinates. A run uses 1–4 AI requests, normally 2–4 when evidence is retrieved;
