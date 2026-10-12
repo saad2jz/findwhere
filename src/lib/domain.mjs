@@ -359,6 +359,10 @@ export function exportReport(investigation, { originId } = {}) {
       for (const warning of pipeline.warnings) lines.push(`- Search limitation: ${md(warning)}`);
       for (const query of pipeline.queries)
         lines.push(`- ${md(query.service)} query: ${md(query.query)}`);
+      for (const attempt of pipeline.attempts || [])
+        lines.push(
+          `- Waterfall ${md(attempt.service)}: ${md(attempt.status)}; ${attempt.count} sources; query: ${md(attempt.query)}`,
+        );
       for (const check of pipeline.checks) {
         lines.push(
           '',

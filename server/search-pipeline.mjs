@@ -123,6 +123,7 @@ export async function runSearchPipeline({
   reserve,
   searchPlaces,
   searchDocuments,
+  waterfall,
   searchReferences,
   fetcher = fetch,
   broadSearch = false,
@@ -135,6 +136,17 @@ export async function runSearchPipeline({
     checks = [],
     warnings = [];
   const engine = broadSearch ? 'Brave Search' : 'Wikipedia';
+  const attempts = [];
+  const documentSearch = waterfall?.createRun({
+    signal,
+    onProgress: (detail) => progress('retrieve', detail),
+    onAttempt: (attempt) => {
+      attempts.push(attempt);
+      discardedSources += attempt.discarded;
+      if (['success', 'empty', 'irrelevant', 'error', 'cached'].includes(attempt.status))
+        queries.push({ service: attempt.service, query: attempt.query });
+    },
+  });
   let requestsUsed = 0;
   let discardedSources = 0;
   let scene;
@@ -189,7 +201,25 @@ export async function runSearchPipeline({
       version: 1,
       startedAt,
       completedAt: new Date().toISOString(),
-      engines: [engine, 'OpenStreetMap', 'Wikimedia Commons'],
+      engines: [
+        ...new Set([
+          ...(documentSearch
+            ? attempts
+                .filter((attempt) =>
+                  ['success', 'empty', 'irrelevant', 'error', 'cached'].includes(attempt.status),
+                )
+                .map((attempt) => attempt.service)
+            : [engine]),
+          'OpenStreetMap',
+          'Wikimedia Commons',
+        ]),
+      ],
+      attempts,
+      reverseImageUsed: attempts.some(
+        (attempt) =>
+          attempt.service === 'Google Lens via SerpApi' &&
+          ['success', 'empty'].includes(attempt.status),
+      ),
       requestsUsed,
       discardedSources,
       contextUsed: Boolean(input.context.trim()),
@@ -235,7 +265,17 @@ export async function runSearchPipeline({
     warnings.push(
       'Broad web search is not configured. This run searches Wikipedia, OpenStreetMap and Wikimedia Commons; coverage of ordinary shops and less documented places is limited.',
     );
-  progress('retrieve', `Searching ${engine}, public map records and reference photographs.`);
+  progress(
+    'retrieve',
+    `Searching ${documentSearch ? 'the configured provider waterfall' : engine}, public map records and reference photographs.`,
+  );
+  if (documentSearch && input.reverseImageConsent) {
+    const matches = await documentSearch.reverseImage(input.reverseImage || input.image);
+    for (const match of matches) addSource(match);
+    warnings.push(
+      'Google Lens visual matches are unverified leads. Retrieved web photos are not automatically fetched; reference comparison uses Wikimedia Commons.',
+    );
+  }
   const places = new Map();
   for (const query of [...new Set(plan.placeQueries)]) {
     const records = await search('OpenStreetMap', query, () =>
@@ -252,7 +292,9 @@ export async function runSearchPipeline({
   }
   for (const query of [...new Set(plan.queries)]) {
     progress('retrieve', `Searching: ${query}`);
-    const docs = await search(engine, query, () => searchDocuments(query, signal));
+    const docs = documentSearch
+      ? await documentSearch.search(query)
+      : await search(engine, query, () => searchDocuments(query, signal));
     for (const record of docs) {
       if (isRelevantSearchRecord(record, query)) addSource(record);
       else discardedSources++;

@@ -14,7 +14,7 @@ import {
   assessComparison,
 } from '../src/lib/image-research.mjs';
 import { createReferenceSearch } from './references.mjs';
-import { createDocumentSearch } from './search-retrieval.mjs';
+import { createSearchWaterfall, defaultSearchLimits } from './search-waterfall.mjs';
 import { runSearchPipeline } from './search-pipeline.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +27,8 @@ const requestSchema = z
     image: imageInput,
     mode: z.enum(['scene', 'comparison', 'pipeline']).default('scene'),
     stream: z.boolean().default(false),
+    reverseImageConsent: z.boolean().default(false),
+    reverseImage: imageInput.optional(),
     referenceImage: imageInput.optional(),
     context: z.string().max(2000).default(''),
     feedback: analysisFeedbackSchema.optional(),
@@ -62,6 +64,16 @@ export function createApp({
   dailyLimit = Number(process.env.AI_DAILY_LIMIT ?? 10),
   usageFile = process.env.AI_USAGE_FILE || '',
   braveKey = process.env.BRAVE_SEARCH_API_KEY || '',
+  tavilyKey = process.env.TAVILY_API_KEY || '',
+  exaKey = process.env.EXA_API_KEY || '',
+  serpapiKey = process.env.SERPAPI_API_KEY || '',
+  searchLimits = Object.fromEntries(
+    Object.entries(defaultSearchLimits).map(([name, limit]) => [
+      name,
+      Number(process.env[`${name.toUpperCase()}_MONTHLY_LIMIT`] ?? limit),
+    ]),
+  ),
+  searchUsageFile = process.env.SEARCH_USAGE_FILE || (usageFile ? `${usageFile}.search` : ''),
 } = {}) {
   const app = express();
   const access = createAccess({
@@ -94,7 +106,13 @@ export function createApp({
       process.env.GEOCODER_USER_AGENT || 'Findwhere/1.0 (https://github.com/saad2jz/findwhere)',
   });
   const searchReferences = createReferenceSearch({ fetcher, now });
-  const searchDocuments = createDocumentSearch({ fetcher, braveKey });
+  const waterfall = createSearchWaterfall({
+    fetcher,
+    now,
+    limits: searchLimits,
+    usageFile: searchUsageFile,
+    keys: { tavily: tavilyKey, exa: exaKey, serpapi: serpapiKey, brave: braveKey },
+  });
   const attempts = new Map();
   let runningAnalysis = 0;
   let globalAttempts = { start: now(), count: 0 };
@@ -160,7 +178,9 @@ export function createApp({
       authConfigured: access.configured,
       authenticated,
       searchPipelineEnabled: aiConfigured && provider === 'gemini',
-      broadSearchEnabled: Boolean(braveKey),
+      broadSearchEnabled: waterfall.providers.length > 1,
+      searchProviders: waterfall.providers,
+      reverseImageEnabled: waterfall.reverseImageEnabled,
       ...usage,
     });
   });
@@ -249,12 +269,9 @@ export function createApp({
       if (searching) {
         // The same auth, origin, concurrency and daily allowance protect every pipeline stage.
         if (!(await quota.status()).dailyRemaining)
-          return res
-            .status(429)
-            .json({
-              error:
-                'The server’s daily analysis limit has been reached. Try again after 00:00 UTC.',
-            });
+          return res.status(429).json({
+            error: 'The server’s daily analysis limit has been reached. Try again after 00:00 UTC.',
+          });
         const disconnect = new AbortController();
         const signal = AbortSignal.any([disconnect.signal, AbortSignal.timeout(240000)]);
         res.on('close', () => {
@@ -264,12 +281,10 @@ export function createApp({
           if (!res.destroyed && !res.writableEnded) res.write(JSON.stringify(event) + '\n');
         };
         if (input.data.stream) {
-          res
-            .status(200)
-            .set({
-              'Content-Type': 'application/x-ndjson; charset=utf-8',
-              'X-Accel-Buffering': 'no',
-            });
+          res.status(200).set({
+            'Content-Type': 'application/x-ndjson; charset=utf-8',
+            'X-Accel-Buffering': 'no',
+          });
           res.flushHeaders();
         }
         const boundedAI = (url, options) =>
@@ -282,10 +297,10 @@ export function createApp({
             ((request) =>
               analyzeGemini({ apiKey: geminiKey, model, input: request, fetcher: boundedAI })),
           searchPlaces: geocoder.search,
-          searchDocuments,
+          waterfall,
           searchReferences,
           fetcher,
-          broadSearch: Boolean(braveKey),
+          broadSearch: waterfall.providers.length > 1,
           signal,
           onProgress: input.data.stream
             ? (progress) => send({ type: 'progress', ...progress })

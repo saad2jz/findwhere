@@ -19,9 +19,11 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   attribution, uncertainties, comparison findings and the number of attempted AI requests in the case,
   JSON backup and Markdown report. User notes and saved candidate coordinates are never supplied as input;
   optional context and selected investigator corrections are explicitly labelled.
-  Without another key, retrieval covers Wikipedia, OpenStreetMap and Wikimedia Commons. Set the optional
-  server-only `BRAVE_SEARCH_API_KEY` for broader public web coverage (up to three queries per run; provider
-  charges may apply). Missing sources, ambiguous branches and unavailable images remain unresolved rather
+  Text retrieval follows **Wikipedia → Tavily → Exa → SerpApi → optional Brave** for each query.
+  Missing keys, exhausted allowances, errors and irrelevant results fall through. Useful records are retained
+  across steps; two relevant distinct source URLs stop that query's chain. This is a retrieval threshold,
+  not independent confirmation of a place. Without extra keys, Wikipedia, OpenStreetMap and Commons work.
+  Missing sources, ambiguous branches and unavailable images remain unresolved rather
   than becoming invented coordinates. A run uses 1–4 AI requests, normally 2–4 when evidence is retrieved;
   every attempt, including a failed attempt, consumes the shared daily allowance. Search/provider failures
   after scene reading retain available partial evidence. References use allowlisted Commons hosts, bounded
@@ -33,6 +35,13 @@ it does not bundle or run the upstream agent skill or its Python/model toolchain
   stemmed-word matches such as a station brand being confused with an unrelated article about shelling.
   Excluded results are counted in the evidence trail and report; if no usable records remain, the server
   skips candidate selection rather than spending another AI request on unrelated evidence.
+  The evidence trail, backup and report record each fallback outcome. Text searches cache for one hour;
+  failing providers enter a cooldown. A run sends at most eight keyed-provider requests across all searches.
+  Optional Google Lens via SerpApi requires an explicit photo-upload checkbox. A metadata-free JPEG under
+  500 KB is directly uploaded to SerpApi and its returned image ID is used for one Lens search. Visual
+  matches are unverified source leads; external result images are not crawled. Reference-photo comparisons
+  continue to use allowlisted Commons images. SerpApi and Google data-handling policies apply; image-ID
+  expiration is not a promise of data deletion.
   [Brave API](https://api-dashboard.search.brave.com/documentation/quickstart),
   [MediaWiki search](https://www.mediawiki.org/wiki/API:Search),
   [Nominatim policy](https://operations.osmfoundation.org/policies/nominatim/).
@@ -179,10 +188,30 @@ are not sent. Gemini receives inline image bytes with no Files API upload; block
 invalid results are rejected. OpenAI requests use `store: false`. Provider data-handling policies still apply
 to each API request. Photos are not automatically uploaded to reverse-image services.
 
-Findwhere search also sends bounded text queries to Wikipedia (or optional Brave Search), Commons and the
+Findwhere search also sends bounded text queries through its configured waterfall, Commons and the
 configured geocoder. Retrieved snippets and the photo are sent to Gemini for candidate selection; up to two
 allowlisted Commons previews are sent with the investigation photo for comparison. Cancelling stops subsequent
 stages but does not refund attempted provider requests. Previous saved results remain intact when cancelled.
+
+### Optional free-tier search configuration
+
+Add any of `TAVILY_API_KEY`, `EXA_API_KEY`, and `SERPAPI_API_KEY` in Render's Environment tab, then
+save and redeploy. Keys stay on the server. One key is enough to expand coverage; configure all three
+to enable every free-tier fallback. A SerpApi key also enables the optional Lens checkbox.
+Brave additionally needs a positive `BRAVE_MONTHLY_LIMIT` (default zero).
+
+Separate shared UTC-month caps default to 900 Tavily requests, 300 Exa requests and 200 SerpApi requests.
+Each attempted network request reserves budget before sending, including failures and Lens uploads.
+Set `SEARCH_USAGE_FILE` for the ledger; by default it derives from `AI_USAGE_FILE`. Corrupt or unavailable
+storage disables keyed searches while keyless research continues. The ledger serializes reservations within
+one server process; it is not a distributed quota service. Render's free ephemeral filesystem can reset it.
+Use provider free plans and dashboard spending limits with paid billing/top-ups disabled. Local request
+caps cannot guarantee zero charges across restarts, other apps using the same keys or pricing changes.
+Exa's allowance is denominated in dollars, so its request cap is deliberately conservative.
+
+Provider API references: [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search),
+[Exa Search](https://exa.ai/docs/reference/search), [SerpApi Google Search](https://serpapi.com/search-api),
+[Lens](https://serpapi.com/google-lens-api), [direct upload](https://serpapi.com/image-api).
 
 The map requests tiles from OpenStreetMap or Esri. Map views reveal the viewed area to the tile provider.
 Place searches send the typed query to Nominatim through the server, with an identifying User-Agent, a global

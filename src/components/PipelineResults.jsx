@@ -69,6 +69,40 @@ export default function PipelineResults({ pipeline }) {
           {warning}
         </p>
       ))}
+      {pipeline.attempts?.length > 0 && (
+        <details>
+          <summary>Search waterfall · {pipeline.attempts.length} steps</summary>
+          <p>
+            Continues until two relevant source URLs are found for a query. This threshold does not
+            confirm a location.
+          </p>
+          <ol>
+            {pipeline.attempts.map((attempt, index) => (
+              <li key={index}>
+                <strong>{attempt.service}</strong> ·{' '}
+                {
+                  {
+                    missing_key: 'Skipped: no key',
+                    cooldown: 'Skipped: provider paused',
+                    run_limit: 'Skipped: run request limit',
+                    quota_limit: 'Skipped: monthly request limit or storage unavailable',
+                    success: 'Relevant sources found',
+                    cached: 'Cached results',
+                    irrelevant: 'No relevant sources',
+                    empty: 'No results',
+                    error: 'Provider unavailable',
+                    image_too_large: 'Skipped: image exceeds upload limit',
+                  }[attempt.status]
+                }
+                {' · '}
+                {attempt.count} sources
+                <br />
+                <span className="muted">{attempt.query}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
       {pipeline.checks.map((check, index) => {
         const reference = pipeline.sources.find((source) => source.id === check.referenceId);
         const thumbnail = commonsImageUrl(reference?.thumbnail);

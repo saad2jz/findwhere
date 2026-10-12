@@ -1,6 +1,26 @@
 import exifr from 'exifr';
 import { pointSchema } from './domain.mjs';
 
+// Strip metadata and fit SerpApi's 500 KB binary upload limit.
+export async function prepareReverseImage(source) {
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(1, 1200 / Math.max(image.naturalWidth, image.naturalHeight));
+  canvas.width = Math.round(image.naturalWidth * scale);
+  canvas.height = Math.round(image.naturalHeight * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  for (const quality of [0.85, 0.7, 0.55, 0.4, 0.25]) {
+    const result = canvas.toDataURL('image/jpeg', quality);
+    if (Math.ceil((result.split(',')[1].length * 3) / 4) <= 480_000) return result;
+  }
+  throw new Error('Photo could not fit the reverse-image upload limit. Choose a smaller image.');
+}
+
 export async function readPhoto(file) {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
     throw new Error('Choose a JPEG, PNG, or WebP image.');

@@ -39,12 +39,36 @@ export const pipelineSchema = z.object({
   version: z.literal(1),
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime(),
-  engines: z.array(z.string().max(80)).max(4),
+  engines: z.array(z.string().max(80)).max(8),
+  reverseImageUsed: z.boolean().default(false),
+  attempts: z
+    .array(
+      z.object({
+        service: z.string().max(80),
+        query: z.string().max(200),
+        status: z.enum([
+          'missing_key',
+          'cooldown',
+          'run_limit',
+          'quota_limit',
+          'success',
+          'cached',
+          'irrelevant',
+          'empty',
+          'error',
+          'image_too_large',
+        ]),
+        count: z.number().int().min(0).max(10),
+        discarded: z.number().int().min(0).max(10),
+      }),
+    )
+    .max(30)
+    .default([]),
   requestsUsed: z.number().int().min(0).max(4),
   discardedSources: z.number().int().min(0).max(100).default(0),
   contextUsed: z.boolean(),
   correctionUsed: z.boolean(),
-  queries: z.array(z.object({ service: z.string().max(80), query: z.string().max(200) })).max(20),
+  queries: z.array(z.object({ service: z.string().max(80), query: z.string().max(200) })).max(50),
   sources: z.array(searchSourceSchema).max(40),
   checks: z.array(searchCheckSchema).max(3),
   warnings: z.array(z.string().max(500)).max(12),

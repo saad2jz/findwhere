@@ -138,6 +138,7 @@ export default function App() {
   const [context, setContext] = useState('');
   const [includeCorrection, setIncludeCorrection] = useState(true);
   const [analysisMode, setAnalysisMode] = useState('pipeline');
+  const [reverseImageConsent, setReverseImageConsent] = useState(false);
   const [searchProgress, setSearchProgress] = useState(null);
   const analysisController = useRef(null);
   const [note, setNote] = useState('');
@@ -326,6 +327,7 @@ export default function App() {
     }
   }
   function startNew() {
+    setReverseImageConsent(false);
     flushCurrent();
     revision.current++;
     setCurrent(createCase());
@@ -335,6 +337,7 @@ export default function App() {
     setTab('evidence');
   }
   function openCase(item) {
+    setReverseImageConsent(false);
     flushCurrent();
     revision.current++;
     setCurrent(item);
@@ -406,6 +409,11 @@ export default function App() {
     analysisController.current = new AbortController();
     const requestRevision = revision.current;
     try {
+      const useReverseImage = searching && reverseImageConsent && health.reverseImageEnabled;
+      const reverseImage = useReverseImage
+        ? await (await import('./lib/photo.mjs')).prepareReverseImage(current.photo)
+        : undefined;
+      analysisController.current.signal.throwIfAborted();
       const response = await fetch('/api/analyze', {
         signal: analysisController.current.signal,
         method: 'POST',
@@ -415,6 +423,7 @@ export default function App() {
           context,
           mode: searching ? 'pipeline' : 'scene',
           stream: searching,
+          ...(useReverseImage ? { reverseImageConsent: true, reverseImage } : {}),
           ...(includeCorrection && current.analysisFeedback
             ? { feedback: current.analysisFeedback }
             : {}),
@@ -1692,6 +1701,33 @@ export default function App() {
               </label>
             </fieldset>
           )}
+          {analysisMode === 'pipeline' && health.provider === 'gemini' && (
+            <div className="analysis-correction">
+              <p>
+                <strong>Search waterfall</strong>
+                <br />
+                Wikipedia → Tavily → Exa → SerpApi → optional Brave.
+              </p>
+              <p>
+                Missing keys and request limits are skipped. Stops after two relevant source URLs
+                per query; this does not confirm the place.
+              </p>
+              <label className="analysis-checkbox">
+                <input
+                  type="checkbox"
+                  checked={reverseImageConsent}
+                  disabled={Boolean(busy) || !health.reverseImageEnabled}
+                  onChange={(event) => setReverseImageConsent(event.target.checked)}
+                />{' '}
+                Also search this photo with Google Lens via SerpApi
+              </label>
+              <p>
+                {health.reverseImageEnabled
+                  ? 'Optional: sends a resized photo to SerpApi and Google. Their data-handling policies apply. Visual matches are leads; reference comparison still uses Commons photos.'
+                  : 'Reverse-image search needs a server-side SERPAPI_API_KEY and an available request allowance.'}
+              </p>
+            </div>
+          )}
           <label className="notes-label" htmlFor="analysis-context">
             Any clues you already have? <span>(optional)</span>
           </label>
@@ -1734,10 +1770,10 @@ export default function App() {
                 <>
                   {' '}
                   Visible-feature queries also go to Wikimedia Commons and{' '}
-                  {health.broadSearchEnabled ? 'Brave Search' : 'Wikipedia'}. Up to two retrieved
+                  {(health.searchProviders || ['Wikipedia']).join(', ')}. Up to two retrieved
                   Commons photos go to Gemini with your investigation image for comparison.
                   {health.broadSearchEnabled
-                    ? ' Up to three Brave searches can incur provider charges.'
+                    ? ' Up to eight keyed-provider requests are allowed per run, including reverse-image uploads. Separate monthly request caps apply; use free provider plans with billing disabled.'
                     : ' Broad web search is not configured; coverage of less documented places is limited.'}{' '}
                   Saved candidates and notes are not included as input.
                 </>
